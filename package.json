@@ -14,7 +14,7 @@
     "icons": "node scripts/make-icons.js",
     "test": "node scripts/selftest.js && node scripts/lidtest.js && node scripts/locktest.js",
     "release": "node scripts/publish-release.js",
-    "package": "node scripts/build-updater.js && node scripts/render-icons.js && electron-packager . InariX --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/icon.ico --ignore=^/dist --ignore=^/scripts --ignore=^/installer --ignore=^/host-agent --prune=true --app-copyright=InariX --win32metadata.ProductName=InariX --win32metadata.FileDescription=InariX && node scripts/post-package.js"
+    "package": "node scripts/build-updater.js && node scripts/render-icons.js && electron-packager . InariX --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/icon.ico --ignore=^/dist --ignore=^/scripts --ignore=^/installer --ignore=^/host-agent --prune=true --app-copyright=InariX --win32metadata.ProductName=InariX --win32metadata.FileDescription=InariX && node scripts/build-setup.js uninstaller && node scripts/post-package.js && node scripts/build-setup.js setup"
   },
   "devDependencies": {
     "@electron/packager": "^18.3.6",

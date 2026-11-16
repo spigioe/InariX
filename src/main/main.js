@@ -26,20 +26,6 @@ const FORCE_BOOT = args.includes('--boot');
 const NO_INTEGRATION = !!process.env.INARIX_NO_INTEGRATION; // teszteléshez: ne hozzon létre parancsikont / autostartot
 
 if (process.env.INARIX_USERDATA) app.setPath('userData', process.env.INARIX_USERDATA);
-// Egyszeri adatáttelepítés az átnevezés előtti adatmappából (beállítások, fiókok, statisztikák, böngésző).
-// Csak akkor fut, ha az új mappa még nem létezik. Miután minden gép frissült, ez a blokk törölhető.
-if (!process.env.INARIX_USERDATA) {
-  try {
-    const LEGACY_DIR = path.join(app.getPath('appData'), 'GamoTex');
-    const dir = app.getPath('userData');
-    if (!fs.existsSync(path.join(dir, 'config.json')) && fs.existsSync(path.join(LEGACY_DIR, 'config.json'))) {
-      fs.cpSync(LEGACY_DIR, dir, { recursive: true, force: false, filter: (src) => !/[\/](Cache|Code Cache|GPUCache|DawnCache|blob_storage)([\/]|$)/i.test(src) && !/lockfile$/i.test(src) });
-      // a böngésző munkamenet (sütik, bejelentkezések) az új partíció néven
-      const oldPart = path.join(dir, 'Partitions', 'gamotex-browser'), newPart = path.join(dir, 'Partitions', 'inarix-browser');
-      if (fs.existsSync(oldPart) && !fs.existsSync(newPart)) fs.renameSync(oldPart, newPart);
-    }
-  } catch { /* áttelepítés nélkül is indul */ }
-}
 // Beépített stream (WebRTC, LAN): valódi helyi IP-k az ICE jelöltekben (mDNS álnevek helyett),
 // és hardveres videókódolás/dekódolás engedélyezése, ahol a Chromium támogatja.
 // A Chromium képernyőmegosztásnál szoftveres kódolót választ (prezentációhoz jó) – játékhoz a hardveres (NVENC/AMF/QSV) kell
@@ -1005,15 +991,13 @@ const SHORTCUTS = () => [
 ];
 // Parancsikonok létrehozása, illetve frissítése, ha az exe máshová került (pl. Letöltésekből a Programs mappába)
 function ensureShortcuts() {
-  // átnevezés (InariX → InariX): a régi parancsikonok törlése
-  for (const old of [path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'InariX.lnk'), path.join(app.getPath('desktop'), 'InariX.lnk')]) {
-    try { if (app.isPackaged && fs.existsSync(old)) fs.unlinkSync(old); } catch { /* */ }
-  }
   if (!app.isPackaged || process.platform !== 'win32' || NO_INTEGRATION) return;
   for (const lnk of SHORTCUTS()) {
     try {
+      // csak a meglévő parancsikonokat igazítjuk (pl. áthelyezés után) – újat a telepítő hoz létre, a felhasználó választása szerint
+      if (!fs.existsSync(lnk)) continue;
       let current = null;
-      if (fs.existsSync(lnk)) { try { current = shell.readShortcutLink(lnk).target; } catch { current = null; } }
+      try { current = shell.readShortcutLink(lnk).target; } catch { current = null; }
       if (current && path.resolve(current).toLowerCase() === path.resolve(process.execPath).toLowerCase()) continue;
       shell.writeShortcutLink(lnk, fs.existsSync(lnk) ? 'replace' : 'create', { target: process.execPath, description: 'InariX konzol', icon: process.execPath, iconIndex: 0 });
       log(`[setup] parancsikon: ${lnk}`);
