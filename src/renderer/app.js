@@ -57,7 +57,7 @@ function modal({ title, body = '', items = [], wide = false, log = false, node =
       body ? h('div', { class: `body${log ? ' log' : ''}` }, body) : null,
       node,
       h('div', { class: 'actions' }, items.map((it, i) =>
-        h('button', { class: `menu-item focusable ${it.kind || ''}`, dataset: i === 0 && !noDefault ? { default: '1' } : {}, onclick: () => close(it.value) }, it.icon ? uiIcon(it.icon, 'mi-ico') : null, it.label))));
+        h('button', { class: `menu-item focusable ${it.kind || ''}`, dataset: (it.def || (i === 0 && !noDefault && !items.some((x) => x.def))) ? { default: '1' } : {}, onclick: () => close(it.value) }, it.icon ? uiIcon(it.icon, 'mi-ico') : null, it.label))));
     layer.innerHTML = '';
     layer.append(box);
     layer.classList.remove('hidden');
@@ -130,6 +130,7 @@ const globalHandlers = {
   start: () => {
     const e = S.tab === 'library' || S.tab === 'home' ? focusedGame() : null;
     if (e && e.running && e.running.length) return runningMenu(e);
+    if (typeof Browser !== 'undefined' && Browser.openApps().length) return Browser.appSwitcher();
     return openQuick();
   },
   guide: () => openQuick(),
@@ -905,7 +906,7 @@ async function hostMenu(host) {
   } else if (['pin', 'streamHost', 'mac', 'name'].includes(v)) {
     const titles = { pin: 'Host PIN', streamHost: 'Moonlight cím (pl. IP vagy gépnév)', mac: 'MAC cím (pl. aa:bb:cc:dd:ee:ff)', name: 'Gép neve' };
     const key = v === 'pin' ? 'token' : v;
-    const val = await OSK.prompt({ title: titles[v], value: host[key] || '' });
+    const val = await OSK.prompt({ title: titles[v], value: host[key] || '', numeric: v === 'pin' });
     if (val === null) return;
     await gamo.hostUpdate(host.id, { [key]: val.trim() });
     await refreshState(); await loadLibrary(false); renderHosts(); toast('Mentve', 'ok', 2000);
@@ -913,7 +914,7 @@ async function hostMenu(host) {
 }
 
 async function addHostFlow(base) {
-  const token = await OSK.prompt({ title: `PIN a gaming PC-ről (${base.name || base.address}) – ott: Beállítások → Host mód` });
+  const token = await OSK.prompt({ title: `PIN a gaming PC-ről (${base.name || base.address}) – ott: Beállítások → Host mód`, numeric: true });
   if (token === null) return;
   try {
     const host = await gamo.hostAdd({ ...base, token });
@@ -942,7 +943,7 @@ async function discoverHosts() {
 }
 
 async function manualHost() {
-  const addr = await OSK.prompt({ title: 'A gaming PC IP-címe vagy neve (pl. 192.168.1.20)' });
+  const addr = await OSK.prompt({ title: 'A gaming PC IP-címe vagy neve (pl. 192.168.1.20)', numeric: true });
   if (!addr) return;
   addHostFlow({ address: addr.trim() });
 }

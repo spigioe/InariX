@@ -1,0 +1,29 @@
+/* InariX – Discord app: kontrollerre, TV-re optimalizált, az InariX témájához igazodó megjelenés (csak ezt a fájlt kell szerkeszteni).
+   A Discord osztálynevei generáltak, ezért a téma változóit és [class*=…] mintákat használunk. */
+:root, .theme-dark, .theme-darker, .theme-midnight, .visual-refresh {
+  --background-primary: var(--inx-bg) !important;
+  --background-secondary: var(--inx-panel) !important;
+  --background-secondary-alt: var(--inx-panel2) !important;
+  --background-tertiary: color-mix(in srgb, var(--inx-bg) 85%, #000) !important;
+  --background-floating: var(--inx-panel) !important;
+  --background-base-low: var(--inx-panel) !important;
+  --background-base-lower: var(--inx-bg) !important;
+  --background-base-lowest: color-mix(in srgb, var(--inx-bg) 85%, #000) !important;
+  --background-surface-high: var(--inx-panel2) !important;
+  --channeltextarea-background: var(--inx-panel) !important;
+  --modal-background: var(--inx-panel) !important;
+  --brand-500: var(--inx-a1) !important;
+  --brand-experiment: var(--inx-a1) !important;
+  --text-link: var(--inx-a2) !important;
+  --interactive-active: #fff !important;
+}
+/* nagyobb, távolról olvasható szöveg */
+[class*="messageContent"], [class*="markup"] { font-size: 19px !important; line-height: 27px !important; }
+[class*="username_"] { font-size: 18px !important; }
+[class*="channelName"], [class*="name_"][class*="overflow"] { font-size: 17px !important; }
+/* zavaró elemek: Nitro / boost reklámok, letöltés gomb */
+[class*="nitroUpsell"], [class*="upsell"], [class*="premiumPromo"], [aria-label="Download Apps"], [aria-label="Alkalmazások letöltése"],
+[class*="giftButton"], [class*="appLauncher"] { display: none !important; }
+/* csatornák: nagyobb sorok */
+[class*="containerDefault"] [class*="link"] { padding-top: 8px !important; padding-bottom: 8px !important; }
+[class*="channelTextArea"] [role="textbox"] { font-size: 19px !important; }

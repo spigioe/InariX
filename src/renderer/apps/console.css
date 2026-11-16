@@ -1,0 +1,18 @@
+/* InariX – közös konzolos stílus minden beépített appban (az app saját CSS-e előtt töltődik be).
+   A színek, a betűtípus és a lekerekítés az aktuális InariX témából jönnek: --inx-a1, --inx-a2, --inx-grad, --inx-bg,
+   --inx-panel, --inx-panel2, --inx-text, --inx-muted, --inx-line, --inx-font, --inx-radius, --inx-radius-sm. */
+body { font-family: var(--inx-font) !important; }
+::selection { background: color-mix(in srgb, var(--inx-a2) 45%, transparent); }
+
+/* a D-paddal kijelölt elem: a téma kiemelő színe, BEFELÉ rajzolva – így a szülő elem levágása sem tünteti el */
+.inx-focus {
+  outline: 3px solid var(--inx-a2) !important; outline-offset: -3px !important;
+  box-shadow: inset 0 0 0 6px color-mix(in srgb, var(--inx-a2) 30%, transparent), 0 0 22px color-mix(in srgb, var(--inx-a2) 45%, transparent) !important;
+  border-radius: var(--inx-radius-sm) !important;
+  transition: outline-color .12s ease, box-shadow .12s ease !important;
+}
+*:focus-visible { outline: 3px solid var(--inx-a2) !important; outline-offset: -3px !important; }
+
+/* hely az InariX alsó gombsávjának */
+body { padding-bottom: 72px !important; box-sizing: border-box; }
+input::placeholder, textarea::placeholder { color: var(--inx-muted) !important; opacity: 1 !important; }

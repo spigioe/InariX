@@ -1,0 +1,67 @@
+/* InariX – YouTube app: TV-re, kontrollerre optimalizált, az InariX témájához igazodó megjelenés.
+   Csak ezt a fájlt kell szerkeszteni – az InariX minden oldalbetöltéskor újra beilleszti.
+   (A téma változói, a kijelölés és a D-pad navigáció: console.css / console-nav.js) */
+
+/* ---- színek: a YouTube sötét témájának változói az InariX témából ---- */
+html, html[dark] {
+  --yt-spec-base-background: var(--inx-bg) !important;
+  --yt-spec-raised-background: var(--inx-panel) !important;
+  --yt-spec-menu-background: var(--inx-panel) !important;
+  --yt-spec-general-background-a: var(--inx-bg) !important;
+  --yt-spec-general-background-b: var(--inx-bg) !important;
+  --yt-spec-general-background-c: var(--inx-panel) !important;
+  --yt-spec-brand-background-solid: var(--inx-bg) !important;
+  --yt-spec-brand-background-primary: var(--inx-bg) !important;
+  --yt-spec-badge-chip-background: var(--inx-panel2) !important;
+  --yt-spec-10-percent-layer: var(--inx-line) !important;
+  --yt-spec-text-primary: var(--inx-text) !important;
+  --yt-spec-text-secondary: var(--inx-muted) !important;
+  --yt-spec-call-to-action: var(--inx-a2) !important;
+  --yt-spec-themed-blue: var(--inx-a2) !important;
+}
+body, ytd-app { background: var(--inx-bg) !important; }
+
+/* ---- nagy kártyák: soronként 3 videó; az első sor a címkék alatt kezdődik ---- */
+ytd-app { --ytd-rich-grid-items-per-row: 3 !important; --ytd-rich-grid-posts-per-row: 3 !important; --ytd-rich-grid-slim-items-per-row: 4 !important; }
+ytd-rich-grid-renderer #contents { padding: 26px 3vw 0 !important; }
+ytd-rich-item-renderer { margin-bottom: 36px !important; }
+ytd-thumbnail, a#thumbnail, yt-thumbnail-view-model, .yt-lockup-view-model__content-image, ytd-thumbnail #thumbnail img { border-radius: var(--inx-radius) !important; }
+
+/* ---- zavaró elemek elrejtése ---- */
+#guide, ytd-mini-guide-renderer, tp-yt-app-drawer#guide, #guide-button,
+#masthead-ad, ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer, ytd-display-ad-renderer, #player-ads,
+ytd-banner-promo-renderer, ytd-statement-banner-renderer, ytd-primetime-promo-renderer, ytd-brand-video-singleton-renderer,
+ytd-rich-shelf-renderer[is-shorts], ytd-reel-shelf-renderer, ytd-rich-section-renderer,
+#voice-search-button, ytd-notification-topbar-button-renderer,
+ytd-merch-shelf-renderer, #ticket-shelf, #clarify-box, #comments, ytd-comments, #chat-container,
+ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"], tp-yt-paper-dialog ytd-mealbar-promo-renderer {
+  display: none !important;
+}
+ytd-rich-item-renderer:has(ytd-ad-slot-renderer), ytd-rich-item-renderer:has(ytd-in-feed-ad-layout-renderer), ytd-rich-item-renderer:empty { display: none !important; }
+ytd-page-manager#page-manager { margin-left: 0 !important; }
+
+/* ---- fejléc és címkesor: tömör, a téma hátterével ---- */
+#frosted-glass { display: none !important; }
+#masthead-container, ytd-masthead, #background.ytd-masthead, #chips-wrapper, ytd-feed-filter-chip-bar-renderer, #header.ytd-rich-grid-renderer {
+  background: var(--inx-bg) !important; backdrop-filter: none !important; opacity: 1 !important;
+}
+input#search, .ytSearchboxComponentInput, #search-form input { font-size: 21px !important; color: var(--inx-text) !important; }
+
+/* ---- címkék: a téma színeivel; a kiválasztott a téma színátmenetével ---- */
+yt-chip-cloud-chip-renderer .ytChipShapeChip { font-size: 17px !important; background: var(--inx-panel) !important; color: var(--inx-text) !important; border-radius: var(--inx-radius-sm) !important; }
+yt-chip-cloud-chip-renderer .ytChipShapeActive, yt-chip-cloud-chip-renderer[selected] .ytChipShapeChip { background: var(--inx-grad) !important; color: #fff !important; }
+.ytChipShapeButtonReset.inx-focus { border-radius: var(--inx-radius-sm) !important; }
+
+/* ---- nagyobb betűk ---- */
+#video-title.ytd-rich-grid-media, #video-title.yt-simple-endpoint, h3.ytd-rich-grid-media, .yt-lockup-metadata-view-model__title { font-size: 21px !important; line-height: 29px !important; }
+#metadata-line.ytd-video-meta-block, ytd-channel-name, #metadata-line span, .yt-content-metadata-view-model__metadata-text { font-size: 16px !important; line-height: 23px !important; }
+
+/* ---- lejátszó oldal ---- */
+ytd-watch-flexy #title h1, ytd-watch-metadata #title h1 { font-size: 30px !important; line-height: 38px !important; }
+ytd-compact-video-renderer #video-title { font-size: 18px !important; line-height: 25px !important; }
+.ytp-play-progress, .ytp-swatch-background-color { background: var(--inx-grad) !important; }
+.ytp-chrome-bottom { font-size: 120% !important; }
+
+/* ---- kijelölés: a bélyegkép lekerekítésével; a címkék gombja és háttere azonos sarkú ---- */
+a#thumbnail.inx-focus, ytd-thumbnail .inx-focus, a.inx-focus:has(img), a.inx-focus:has(yt-thumbnail-view-model), .yt-lockup-view-model .inx-focus { border-radius: var(--inx-radius) !important; }
+.ytChipShapeButtonReset, .ytChipShapeButtonReset .ytChipShapeChip, yt-chip-cloud-chip-renderer, yt-chip-cloud-chip-renderer .ytChipShapeChip { border-radius: var(--inx-radius-sm) !important; overflow: hidden; }

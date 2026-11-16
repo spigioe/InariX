@@ -406,6 +406,16 @@ function registerIpc() {
   handle('weather', () => homeinfo.weather((cfg.get().ui.weatherCity || '').trim()));
   handle('radios', () => homeinfo.radios());
   handle('media-key', (k) => homeinfo.mediaKey(k));
+  handle('now-playing', (a, art) => homeinfo.nowPlaying(a, !!art));
+  handle('spotify-installed', () => homeinfo.spotifyInstalled());
+  handle('spotify-install', () => homeinfo.spotifyInstall());
+  handle('spotify-open', async (kind, q, play) => {
+    const w = win && !win.isDestroyed() && win.isVisible();
+    await homeinfo.spotifyOpen(kind, q, !!play);
+    // a Spotify ablaka előrejön – lejátszásnál visszahozzuk az InariX-et (a zene a háttérben szól tovább)
+    if (play && w) { win.show(); win.focus(); }
+    return true;
+  });
   handle('brightness', (v) => homeinfo.brightness(v === null ? undefined : v));
   handle('pad-battery', () => homeinfo.padBattery());
   handle('trailer', async (appid) => (await library.steamDetails(String(appid).replace(/\D/g, ''))).trailer || null);

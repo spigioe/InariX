@@ -21,11 +21,36 @@ const Browser = (() => {
     ['HowLongToBeat', 'https://howlongtobeat.com/', '#3b82f6'],
   ];
   const ZOOMS = [0.5, 0.67, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5];
+  // „Alkalmazások”: teljes képernyős böngésző (eszköztár nélkül) a beépített böngésző bejelentkezéseivel,
+  // saját, TV-re optimalizált CSS-sel (src/renderer/apps/*.css – csak azt kell szerkeszteni)
+  // pass: azon belül a D-pad balra/jobbra az oldalé (lejátszó); rawPad: a kontroller közvetlenül az oldalé (felhős játék)
+  const APPS = {
+    youtube: { title: 'YouTube', sub: 'Videók – a böngésző Google-fiókjával', icon: 'b-youtube', color: 'linear-gradient(135deg,#ff0033,#b3001b)', url: 'https://www.youtube.com/', css: 'apps/youtube-tv.css', match: /(^|\.)youtube\.com$/i, zoom: 1.25, pass: '#movie_player',
+      init: "const h=document.documentElement; const set=()=>{ if(!h.hasAttribute('dark')) h.setAttribute('dark',''); }; set(); new MutationObserver(set).observe(h,{attributes:true,attributeFilter:['dark']});", card: 'ytd-rich-item-renderer, ytd-compact-video-renderer, ytd-video-renderer, ytd-grid-video-renderer, yt-lockup-view-model, ytd-playlist-renderer' },
+    twitch: { title: 'Twitch', sub: 'Élő adások', icon: 'b-twitch', color: 'linear-gradient(135deg,#9146ff,#5b21b6)', url: 'https://www.twitch.tv/', css: 'apps/twitch.css', match: /(^|\.)twitch\.tv$/i, zoom: 1.2, pass: '[data-a-target="video-player"]', card: 'article',
+      init: "const h=document.documentElement; const set=()=>{ if(!h.classList.contains('tw-root--theme-dark')){ h.classList.remove('tw-root--theme-light'); h.classList.add('tw-root--theme-dark'); } }; set(); new MutationObserver(set).observe(h,{attributes:true,attributeFilter:['class']});" },
+    ytmusic: { fit: true, title: 'YouTube Music', sub: 'Zene a YouTube-fiókoddal', icon: 'b-ytmusic', color: 'linear-gradient(135deg,#ff0033,#7f1d1d)', url: 'https://music.youtube.com/', css: 'apps/ytmusic.css', match: /^music\.youtube\.com$/i, zoom: 1.2, pass: 'ytmusic-player', card: 'ytmusic-two-row-item-renderer, ytmusic-responsive-list-item-renderer' },
+    discord: { fit: true, title: 'Discord', sub: 'Szerverek és üzenetek', icon: 'b-discord', color: 'linear-gradient(135deg,#5865f2,#3730a3)', url: 'https://discord.com/app', css: 'apps/discord.css', match: /(^|\.)discord\.com$/i, zoom: 1 },
+    steamchat: { fit: true, title: 'Steam Chat', sub: 'Barátok és üzenetek', icon: 'b-steam', color: 'linear-gradient(135deg,#1b9fff,#1e3a8a)', url: 'https://steamcommunity.com/chat', css: 'apps/steamchat.css', match: /(^|\.)steamcommunity\.com$/i, zoom: 1.2 },
+    xcloud: { fit: true, title: 'Xbox Cloud Gaming', sub: 'Game Pass játékok letöltés nélkül', icon: 'b-xbox', color: 'linear-gradient(135deg,#107c10,#0b5c0b)', url: 'https://www.xbox.com/hu-HU/play', css: 'apps/xcloud.css', match: /(^|\.)xbox\.com$/i, zoom: 1, rawPad: true },
+    spotify: { fit: true, title: 'Spotify', sub: 'Zene – open.spotify.com, a Spotify-fiókoddal', icon: 'b-spotify', color: 'linear-gradient(135deg,#1db954,#14532d)', url: 'https://open.spotify.com/', css: 'apps/spotify.css', match: /(^|\.)spotify\.com$/i, zoom: 1.15, card: '[data-testid="tracklist-row"], [data-encore-id="card"]' },
+    geforcenow: { fit: true, title: 'GeForce NOW', sub: 'Felhős játék a saját Steam / Epic könyvtáradból', icon: 'b-geforce', color: 'linear-gradient(135deg,#76b900,#365314)', url: 'https://play.geforcenow.com/', css: 'apps/geforcenow.css', match: /(^|\.)geforcenow\.com$/i, zoom: 1, rawPad: true },
+    reddit: { title: 'Reddit', sub: 'Közösségek és hírfolyam', icon: 'b-reddit', color: 'linear-gradient(135deg,#ff4500,#9a3412)', url: 'https://www.reddit.com/r/gaming/', css: 'apps/reddit.css', match: /(^|\.)reddit\.com$/i, zoom: 1.2, card: 'shreddit-post, article' },
+    hltb: { title: 'HowLongToBeat', sub: 'Mennyi idő végigjátszani', icon: 'clock', color: 'linear-gradient(135deg,#3b82f6,#1e3a8a)', url: 'https://howlongtobeat.com/', css: 'apps/hltb.css', match: /(^|\.)howlongtobeat\.com$/i, zoom: 1.2 },
+    radar: { fit: true, map: true, title: 'Időjárás radar', sub: 'Csapadék, szél, felhők (Windy)', icon: 'radar', color: 'linear-gradient(135deg,#0ea5e9,#0f766e)', url: 'https://www.windy.com/-Radar-radar?radar,47.3,19.4,7', css: 'apps/radar.css', match: /(^|\.)windy\.com$/i, zoom: 1.1 },
+    news: { title: 'Hírek', sub: 'Google Hírek – a legfontosabb hírek', icon: 'news', color: 'linear-gradient(135deg,#4285f4,#1e40af)', url: 'https://news.google.com/home?hl=hu&gl=HU&ceid=HU:hu', css: 'apps/news.css', match: /^news\.google\.com$/i, zoom: 1.2, card: 'article' },
+    maps: { fit: true, map: true, title: 'Térkép', sub: 'Google Maps és Street View', icon: 'b-maps', color: 'linear-gradient(135deg,#34a853,#166534)', url: 'https://www.google.com/maps/@47.4979,19.0402,12z?hl=hu', css: 'apps/maps.css', match: /^(www\.)?google\.[a-z.]+$/i, zoom: 1.1 },
+    speedtest: { title: 'Sebességmérő', sub: 'A net sebessége (fast.com)', icon: 'gauge', color: 'linear-gradient(135deg,#e11d48,#7c2d12)', url: 'https://fast.com/', css: 'apps/speedtest.css', match: /(^|\.)fast\.com$/i, zoom: 1 },
+  };
+  let NAV_JS = null, BASE_CSS = null, SCROLL_CSS = null;
+  // az app nagyítása az InariX „Felület mérete” beállításához igazodik (100% = az app alapnagyítása)
+  const appZoom = (a) => Math.round((a.zoom || 1) * (((S.state && S.state.settings.ui.scale) || 100) / 100) * 100) / 100;
 
   const B = {
     wv: null, ready: false, mode: 'toolbar', showPage: false, url: '', title: '', loading: false,
     canBack: false, canFwd: false, zoom: 1, fullscreen: false, playing: false, hideBar: false,
     cur: { x: -1, y: -1 }, curVisible: false, padHeld: {}, raf: 0, lastT: 0, downloads: [],
+    app: null, // { id, title, css, match, zoom, prevZoom }
   };
   const cfg = () => (S.state && S.state.settings.browser) || { bookmarks: [], history: [], search: 'google', home: '', saveHistory: true, cursorSpeed: 100 };
   const el = (id) => document.getElementById(id);
@@ -52,40 +77,323 @@ const Browser = (() => {
   }
 
   // ---------- Webview ----------
+  // Több nézet: a böngészőnek és minden megnyitott appnak saját webview-ja van (egyszerre több app futhat,
+  // a háttérben lévők tovább szólnak). B.wv / B.app mindig az előtérben lévő nézet.
+  const VIEWS = new Map(); // kulcs ('browser' vagy app id) → webview
+  function saveViewState() {
+    if (!B.wv) return;
+    B.wv._st = { showPage: B.showPage, url: B.url, title: B.title, zoom: B.zoom, vstate: B.vstate };
+    // előnézeti kép az appváltóhoz
+    if (B.wv._app && B.wv._ready && B.showPage) {
+      const w = B.wv;
+      w.capturePage().then((img) => { try { w._thumb = img.resize({ width: 480 }).toDataURL(); } catch { /* */ } }).catch(() => {});
+    }
+  }
+  function activate(key) {
+    if (B.wv && B.wv._key === key) return;
+    saveViewState();
+    leavePage({ focus: false });
+    for (const [k, w] of VIEWS) w.classList.toggle('bgview', k !== key);
+    const wv = VIEWS.get(key) || null;
+    B.key = key; B.wv = wv; B.ready = !!(wv && wv._ready);
+    const st = (wv && wv._st) || { showPage: false, url: '', title: '', zoom: 1, vstate: null };
+    B.showPage = st.showPage; B.url = st.url; B.title = st.title; B.zoom = st.zoom || 1; B.vstate = st.vstate || null;
+    B.app = wv ? wv._app || null : null;
+    B.canBack = !!(wv && B.ready && wv.canGoBack()); B.canFwd = !!(wv && B.ready && wv.canGoForward());
+    B.playing = !!(wv && wv._playing);
+  }
+  const audible = (w) => { try { return !!(w && w._ready && w.isCurrentlyAudible()); } catch { return false; } };
+  function openApps() {
+    return [...VIEWS.values()].filter((w) => w._app).map((w) => ({ id: w._key, title: w._app.title, icon: w._app.icon, color: w._app.color,
+      brand: w._app.brand, front: w === B.wv && S.tab === 'browser', audible: audible(w), thumb: w._thumb || null }));
+  }
+
   function ensureView() {
     if (B.wv) return B.wv;
+    const key = B.key || 'browser';
     const wv = document.createElement('webview');
+    wv._key = key; wv._app = B.app || null;
+    VIEWS.set(key, wv);
     wv.setAttribute('partition', PARTITION);
     wv.setAttribute('allowpopups', ''); // a felugrókat a fő folyamat ugyanebbe a nézetbe irányítja
     wv.setAttribute('webpreferences', 'contextIsolation=yes, sandbox=yes');
-    wv.id = 'br-webview';
+    if (key === 'browser') wv.id = 'br-webview';
     el('br-view').prepend(wv);
+    const cur = () => B.wv === wv;
     const sync = () => {
-      if (!B.ready) return;
+      if (!cur() || !B.ready) return;
       B.canBack = wv.canGoBack(); B.canFwd = wv.canGoForward();
       B.url = wv.getURL(); B.title = wv.getTitle() || hostOf(B.url);
       renderBar();
+      if (B.app) updateAppHints();
     };
     wv.addEventListener('dom-ready', () => {
-      if (!B.ready) { B.ready = true; wv.setZoomFactor(B.zoom); }
+      if (!wv._ready) { wv._ready = true; wv.setZoomFactor(cur() ? B.zoom : 1); }
+      if (cur()) B.ready = true;
+      applyAppCss(wv);
       sync();
     });
-    wv.addEventListener('did-start-loading', () => { B.loading = true; renderBar(); });
-    wv.addEventListener('did-stop-loading', () => { B.loading = false; sync(); });
-    wv.addEventListener('did-navigate', (e) => { B.url = e.url; sync(); addHistory(e.url, wv.getTitle()); });
-    wv.addEventListener('did-navigate-in-page', (e) => { if (e.isMainFrame) { B.url = e.url; sync(); addHistory(e.url, wv.getTitle()); } });
-    wv.addEventListener('page-title-updated', (e) => { B.title = e.title; renderBar(); updateHistoryTitle(B.url, e.title); });
+    wv.addEventListener('did-start-loading', () => { if (cur()) { B.loading = true; renderBar(); } });
+    wv.addEventListener('did-stop-loading', () => { if (cur()) { B.loading = false; sync(); } });
+    wv.addEventListener('did-navigate', (e) => { if (!cur()) return; B.url = e.url; sync(); if (!wv._app) addHistory(e.url, wv.getTitle()); });
+    wv.addEventListener('did-navigate-in-page', (e) => { if (cur() && e.isMainFrame) { B.url = e.url; sync(); if (!wv._app) addHistory(e.url, wv.getTitle()); } });
+    wv.addEventListener('page-title-updated', (e) => { if (!cur()) return; B.title = e.title; renderBar(); updateHistoryTitle(B.url, e.title); });
     wv.addEventListener('did-fail-load', (e) => {
-      if (!e.isMainFrame || e.errorCode === -3) return; // -3: megszakítva (pl. új navigáció)
+      if (!cur() || !e.isMainFrame || e.errorCode === -3) return; // -3: megszakítva (pl. új navigáció)
       toast(`Az oldal nem tölthető be (${e.errorDescription || e.errorCode})`, 'err');
     });
-    wv.addEventListener('enter-html-full-screen', () => setFullscreen(true));
-    wv.addEventListener('leave-html-full-screen', () => setFullscreen(false));
-    wv.addEventListener('media-started-playing', () => { B.playing = true; });
-    wv.addEventListener('media-paused', () => { B.playing = false; });
+    wv.addEventListener('enter-html-full-screen', () => { if (cur()) setFullscreen(true); });
+    wv.addEventListener('leave-html-full-screen', () => { if (cur()) setFullscreen(false); });
+    wv.addEventListener('media-started-playing', () => { wv._playing = true; if (cur()) B.playing = true; });
+    wv.addEventListener('media-paused', () => { wv._playing = false; if (cur()) B.playing = false; });
     wv.addEventListener('render-process-gone', () => { toast('Az oldal összeomlott – újratöltés…', 'err'); setTimeout(() => wv.reload(), 800); });
     B.wv = wv;
     return wv;
+  }
+
+  // az alkalmazás CSS-e minden oldalbetöltéskor (csak az alkalmazás saját domainjén)
+  function applyAppCss(wv = B.wv) {
+    const a = wv && wv._app;
+    if (!a || !a.css || !wv._ready) return;
+    let host = '';
+    try { host = new URL(wv.getURL()).hostname; } catch { /* */ }
+    if (a.match && !a.match.test(host)) return;
+    // a design system: az aktuális InariX téma színei, betűtípusa, lekerekítése CSS-változókként (az app CSS-e ezekből dolgozik)
+    // téma változók és design system görgetősáv minden appban (a felhős játékokban is)
+    wv.insertCSS(themeVars()).catch(() => {});
+    if (SCROLL_CSS) wv.insertCSS(SCROLL_CSS).catch(() => {});
+    if (BASE_CSS && !a.rawPad) wv.insertCSS(BASE_CSS).catch(() => {});
+    wv.insertCSS(a.css).catch(() => {});
+    // rögzített elrendezésű appnál a nézet már a gombsáv fölött ér véget – nem kell alsó margó
+    if (a.fit) wv.insertCSS('body { padding-bottom: 0 !important; }').catch(() => {});
+    wv.setZoomFactor(appZoom(a));
+    // térkép appok: a térkép kapja a billentyűzetet (nyilak = mozgatás, +/- = nagyítás)
+    if (a.map) wv.executeJavaScript(`setTimeout(() => { let best = null, area = 0; for (const e of document.querySelectorAll('.leaflet-container, #map-container, [tabindex], canvas')) { const r = e.getBoundingClientRect(); if (r.width * r.height > area) { area = r.width * r.height; best = e; } } const pref = document.querySelector('.leaflet-container, #map-container'); if (pref) best = pref; if (best) { if (!best.hasAttribute('tabindex')) best.setAttribute('tabindex', '0'); best.focus(); } }, 1500)`, false).catch(() => {});
+    // konzolos D-pad navigáció az oldalon (felhős játéknál nem kell – ott a kontroller a játéké)
+    if (NAV_JS && !a.rawPad && !a.map) wv.executeJavaScript(`window.__inxPass = ${JSON.stringify(a.pass || '')}; window.__inxCard = ${JSON.stringify(a.card || '')}; window.__inxInit = ${a.init ? `() => { ${a.init} }` : 'null'};\n${NAV_JS}`, false).catch(() => {});
+  }
+  // ---- Háttérbe tétel: az app tovább fut, a kezdőképernyőre lépünk; több app is futhat egyszerre ----
+  function backgroundApp({ toHome = true } = {}) {
+    if (!B.app) return;
+    const a = B.app, w = B.wv;
+    if (B.fullscreen) exitFullscreen();
+    activate('browser');
+    document.body.classList.remove('br-fs', 'br-app', 'br-fit');
+    B.hideBar = false;
+    updateAppHints();
+    if (toHome && S.tab === 'browser') setTab('home');
+    // csak akkor mondjuk, hogy a gyorsmenüből hallgatható, ha tényleg szól
+    setTimeout(() => toast(audible(w) ? `${a.title} tovább szól – vezérlés: gyorsmenü` : `${a.title} a háttérben vár – ≡ (Start): megnyitott appok`, 'ok', 4000), 150);
+  }
+  function enterAppUi() {
+    B.hideBar = true;
+    document.body.classList.add('br-fs', 'br-app');
+    document.body.classList.toggle('br-fit', !!(B.app && B.app.fit));
+    if (S.tab !== 'browser') setTab('browser', { silent: true });
+    renderBar(); renderView();
+    setTimeout(() => enterPage(), 120);
+    clearTimeout(vTimer); setTimeout(pollVideo, 400);
+    updateAppHints();
+  }
+  function resumeApp(id) { openApp(id || (openApps()[0] || {}).id); }
+  // a gyorsmenünek: egy app médiája és vezérlése (alapból az előtérben lévő, különben amelyik szól)
+  function mediaView(id) {
+    if (id) return VIEWS.get(id) || null;
+    const apps = [...VIEWS.values()].filter((w) => w._app && !w._app.rawPad && w._ready);
+    return apps.find((w) => audible(w)) || (B.app && B.wv) || apps.find((w) => w._playing) || null;
+  }
+  async function appMedia(id) {
+    const w = mediaView(id);
+    if (!w) return null;
+    const st = await w.executeJavaScript('window.__inxPlayer ? window.__inxPlayer("state") : null', false).catch(() => null);
+    return st ? { ...st, appId: w._key, appTitle: w._app.title, bg: w !== B.wv || S.tab !== 'browser', audible: audible(w) } : null;
+  }
+  const appCmd = (cmd, arg, id) => { const w = mediaView(id); return w ? w.executeJavaScript(`window.__inxPlayer ? window.__inxPlayer(${JSON.stringify(cmd)}, ${Number(arg) || 0}) : null`, true).catch(() => null) : Promise.resolve(null); };
+
+  function themeVars() {
+    const t = typeof activeTheme === 'function' ? activeTheme() : {};
+    const font = (typeof FONTS !== 'undefined' && FONTS[t.font] ? FONTS[t.font][1] : '"Segoe UI", system-ui, sans-serif');
+    const a1 = t.a1 || '#7c3aed', a2 = t.a2 || '#22d3ee', bg = t.bg || '#05060a', panel = t.panel || '#12141e', rad = t.radius ?? 14;
+    return `:root { --inx-a1: ${a1}; --inx-a2: ${a2}; --inx-bg: ${bg}; --inx-panel: ${panel}; --inx-grad: linear-gradient(135deg, ${a1}, ${a2});
+      --inx-radius: ${rad}px; --inx-radius-sm: ${Math.round(rad * 0.6)}px; --inx-font: ${font};
+      --inx-text: #f4f4f5; --inx-muted: #a1a1aa; --inx-line: rgba(255, 255, 255, .1); --inx-panel2: color-mix(in srgb, ${panel} 80%, #fff 6%); }`;
+  }
+
+  async function openApp(id) {
+    if (id === 'browser') { showBrowser(); return; }
+    const def = APPS[id];
+    if (!def) return;
+    const txt = (f) => fetch(f).then((r) => r.text()).catch(() => '');
+    let css;
+    [css, NAV_JS, BASE_CSS, SCROLL_CSS] = await Promise.all([txt(def.css), NAV_JS || txt('apps/console-nav.js'), BASE_CSS || txt('apps/console.css'), SCROLL_CSS || txt('apps/scrollbar.css')]);
+    if (VIEWS.has(id)) { activate(id); enterAppUi(); return; } // már fut: előtérbe
+    saveViewState();
+    leavePage({ focus: false });
+    for (const w of VIEWS.values()) w.classList.add('bgview');
+    B.key = id; B.wv = null; B.ready = false; B.showPage = false; B.vstate = null; B.zoom = 1;
+    B.app = { id, ...def, css };
+    enterAppUi();
+    navigate(def.url);
+    toast(`${def.title} – ≡ (Start): megnyitott appok · Guide: kilépés`, '', 4000);
+  }
+  // a beépített böngésző (az Alkalmazások közül)
+  function showBrowser() {
+    if (B.app) { saveViewState(); document.body.classList.remove('br-fs', 'br-app', 'br-fit'); B.hideBar = false; }
+    activate('browser');
+    updateAppHints();
+    setTab('browser');
+  }
+  function closeApp({ home = true, id } = {}) {
+    const key = id || (B.app && B.app.id);
+    const w = key && VIEWS.get(key);
+    if (!w || !w._app) return false;
+    const front = w === B.wv;
+    if (front) { if (B.fullscreen) exitFullscreen(); activate('browser'); document.body.classList.remove('br-fs', 'br-app', 'br-fit'); B.hideBar = false; }
+    VIEWS.delete(key);
+    try { w.remove(); } catch { /* */ }
+    updateAppHints();
+    if (front && home) setTab('home');
+    return true;
+  }
+
+  // ---- Appváltó (≡ / Start): a megnyitott appok áttekintése, mint iOS-en ----
+  let switching = false;
+  async function appSwitcher() {
+    if (switching) return;
+    switching = true;
+    updateAppHints();
+    if (B.app) saveViewState();
+    leavePage({ focus: false });
+    await new Promise((r) => setTimeout(r, 120)); // az előnézeti kép elkészül
+    const node = h('div', { class: 'app-switch' });
+    let pick = null;
+    const close = () => { const m = $('#modal-layer .menu-item:last-child'); if (m) m.click(); };
+    const list = openApps();
+    for (const a of list) {
+      const card = h('button', { class: 'as-card focusable', dataset: { id: a.id, ...(a.front ? { default: '1' } : {}) }, onclick: () => { pick = a.id; close(); } },
+        h('div', { class: 'as-shot', style: a.thumb ? `background-image:url(${a.thumb})` : '' }, a.thumb ? null : appIcon(a.id, 'big')),
+        h('div', { class: 'as-cap' }, appIcon(a.id), h('b', {}, a.title), a.audible ? h('span', { class: 'as-sound' }, uiIcon('volume'), 'szól') : null));
+      // bezárás gomb az app alatt (kontrollerrel: lefelé lépve, vagy Ⓧ a kártyán)
+      const x = h('button', { class: 'as-close focusable', dataset: { closeId: a.id }, onclick: () => closeOne(wrap) }, uiIcon('close'), 'Bezárás');
+      const wrap = h('div', { class: 'as-item', dataset: { id: a.id } }, card, x);
+      node.append(wrap);
+    }
+    node.append(h('button', { class: 'as-card as-home focusable', dataset: list.length ? {} : { default: '1' }, onclick: () => { pick = '#home'; close(); } },
+      h('div', { class: 'as-shot' }, uiIcon('apps')), h('div', { class: 'as-cap' }, h('b', {}, list.length ? 'Kezdőlap / más app' : 'Nincs megnyitott app'))));
+    function closeOne(wrap) {
+      if (!wrap) return;
+      closeApp({ id: wrap.dataset.id, home: false });
+      const nx = wrap.nextElementSibling || wrap.previousElementSibling;
+      wrap.remove();
+      if (nx) Nav.focus(nx.matches('.focusable') ? nx : nx.querySelector('.as-card'));
+      toast('App bezárva', '', 1500);
+    }
+    const closeFocused = () => { const c = Nav.current(); closeOne(c && c.closest('.as-item')); return true; };
+    document.body.classList.add('switcher-open');
+    await modal({ title: 'Megnyitott appok', body: 'Ⓐ megnyitás · Ⓧ vagy a Bezárás gomb: app bezárása · Ⓑ vissza', node, wide: true, noDefault: true, items: [{ label: 'Vissza', value: null }],
+      handlers: { x: closeFocused, start: () => { close(); return true; } } });
+    switching = false;
+    document.body.classList.remove('switcher-open');
+    if (pick === '#home') { if (B.app) backgroundApp(); else setTab('home'); if (typeof appsMenu === 'function') appsMenu(); return; }
+    if (pick) { openApp(pick); return; }
+    if (B.app && VIEWS.has(B.app.id)) enterAppUi(); // vissza az előtérben lévő apphoz
+  }
+
+  // ---- Gombjelző sáv az appokban (teljes képernyős videónál rejtve) ----
+  let hintEl = null, vTimer = 0;
+  function appHintsEl() {
+    if (hintEl) return hintEl;
+    hintEl = document.createElement('div');
+    hintEl.id = 'br-app-hints';
+    hintEl.setAttribute('popover', 'manual');
+    // resume: a gomb után vissza az oldalra (vissza / előre), különben a gomb maga dönt (kilépés, háttérbe, menü)
+    const btn = (cls, text, title, fn, resume = false) => { const b = document.createElement('button'); b.className = `ah-btn ${cls}`; b.textContent = text; b.title = title; b.addEventListener('click', (e) => { e.stopPropagation(); barDone(resume); fn(); }); return b; };
+    const nav = document.createElement('div');
+    nav.className = 'ah-nav';
+    nav.append(btn('', '‹  Vissza', 'Vissza (LB)', () => back(), true), btn('', 'Előre  ›', 'Előre (RB)', () => forward(), true), btn('bgb', '⤓  Háttérbe', 'Háttérbe – tovább szól', () => backgroundApp()),
+      btn('', '≡  Menü', 'Nagyítás, könyvjelző…', () => menu()), btn('exit', '✕  Kilépés', 'Kilépés (Guide)', () => confirmExit()));
+    const list = document.createElement('div');
+    list.className = 'ah-list';
+    hintEl.append(nav, list);
+    document.body.append(hintEl);
+    return hintEl;
+  }
+  function updateAppHints() {
+    const el = appHintsEl();
+    const show = !!B.app && !switching && S.tab === 'browser' && !B.fullscreen && !(B.vstate && B.vstate.fs) && !exitAsking;
+    try {
+      if (!show) { if (el.matches(':popover-open')) el.hidePopover(); return; }
+      const pad = document.body.classList.contains('pad-mode') || Nav.padConnected();
+      const H = (cls, k, t) => { const s = document.createElement('span'); s.className = 'hint'; const b = document.createElement('b'); b.className = cls; b.textContent = k; s.append(b, t); return s; };
+      const v = B.vstate && B.vstate.has;
+      const L = B.app.rawPad ? [H('btn-start', 'Guide', 'Kilépés')]
+        : B.app.map ? (pad ? [H('btn-start', '✚', 'Mozgatás'), H('btn-start', 'LT/RT', 'Nagyítás'), H('btn-start', 'L', 'Kurzor'), H('btn-a', 'A', 'Kattintás'), H('btn-start', '≡', 'Appok'), H('btn-start', 'Guide', 'Kilépés')]
+          : [H('kbd', 'Nyilak', 'Mozgatás'), H('kbd', 'Görgő', 'Nagyítás'), H('kbd', 'F9', 'Appok'), H('kbd', 'Esc', 'Kilépés')])
+        : !pad ? [H('kbd', 'Nyilak', 'Navigáció'), H('kbd', 'Enter', 'Kiválasztás'), H('kbd', 'F9', 'Appok'), H('kbd', 'F10', 'Gombsáv'), H('kbd', 'Alt+←/→', 'Vissza / előre'), ...(v ? [H('kbd', 'Szóköz', 'Lejátszás / szünet'), H('kbd', 'F', 'Teljes képernyő')] : []), H('kbd', 'Esc', 'Kilépés')]
+          : v ? [H('btn-a', 'A', 'Kattintás'), H('btn-y', 'Y', B.vstate.paused ? 'Lejátszás' : 'Szünet'), H('btn-start', 'LT/RT', '−/+ 10 mp'), H('btn-x', 'X', 'Teljes képernyő'), H('btn-start', '≡', 'Appok'), H('btn-start', 'Guide', 'Kilépés')]
+            : [H('btn-start', '✚', 'Navigáció'), H('btn-a', 'A', 'Kiválasztás'), H('btn-start', 'LB/RB', 'Vissza / előre'), H('btn-x', 'X', 'Gépelés'), H('btn-start', '≡', 'Appok'), H('btn-start', 'Guide', 'Kilépés')];
+      el.querySelector('.ah-list').replaceChildren(...L);
+      const bk = el.querySelector('.ah-btn');
+      if (bk) { bk.disabled = !(B.wv && B.ready && B.wv.canGoBack()); bk.nextSibling.disabled = !(B.wv && B.ready && B.wv.canGoForward()); }
+      if (!el.matches(':popover-open')) el.showPopover();
+    } catch { /* */ }
+  }
+  // A gombsáv kontrollerrel (≡) és billentyűzettel (F10) is elérhető: balra/jobbra a gombok, Ⓐ/Enter megnyomja,
+  // Ⓑ / Esc / fel: vissza az oldalra
+  function focusBar() {
+    if (!B.app || B.barFocus) return;
+    const el = appHintsEl();
+    updateAppHints();
+    if (!el.matches(':popover-open')) return;
+    leavePage({ focus: false });
+    const nav = el.querySelector('.ah-nav');
+    nav.querySelectorAll('.ah-btn').forEach((b) => b.classList.add('focusable'));
+    B.barFocus = true;
+    el.classList.add('active');
+    const out = () => { barDone(true); return true; };
+    Nav.push(() => nav, { b: out, start: out, up: out, down: () => true, guide: () => { barDone(false); confirmExit(); return true; } });
+    requestAnimationFrame(() => Nav.focus(nav.querySelector('.ah-btn:not(:disabled)')));
+    Sound.move();
+  }
+  function barDone(resume) {
+    if (!B.barFocus) return;
+    B.barFocus = false;
+    Nav.pop();
+    if (hintEl) { hintEl.classList.remove('active'); hintEl.querySelectorAll('.focused').forEach((x) => x.classList.remove('focused')); }
+    if (resume && B.app && B.showPage) enterPage();
+  }
+
+  function pollVideo() {
+    clearTimeout(vTimer);
+    if (!B.app || B.app.rawPad) { B.vstate = null; updateAppHints(); return; }
+    if (B.wv && B.ready) {
+      B.wv.executeJavaScript('window.__inxPlayer ? window.__inxPlayer("state") : null', false)
+        .then((st) => { B.vstate = st; updateAppHints(); }).catch(() => {});
+    }
+    vTimer = setTimeout(pollVideo, 1000);
+  }
+
+  let exitAsking = false;
+  async function confirmExit() {
+    if (exitAsking) return;
+    exitAsking = true;
+    updateAppHints();
+    if (B.fullscreen) exitFullscreen();
+    const wasPage = B.mode === 'page';
+    leavePage({ focus: false });
+    const name = B.app ? B.app.title : 'a böngészőből';
+    const v = await modal({
+      title: B.app ? `Kilépsz: ${B.app.title}?` : 'Kilépsz a böngészőből?',
+      body: B.app ? 'Visszatérsz az InariX kezdőképernyőjére.' : 'A megnyitott oldal bezárul, és visszatérsz a kezdőképernyőre.',
+      items: [{ icon: 'close', label: 'Kilépés', value: 'exit', kind: 'danger' }, ...(B.app && !B.app.rawPad ? [{ icon: 'toDesktop', label: 'Háttérbe (nyitva marad)', value: 'bg' }] : []), { label: 'Mégse', value: null, def: true }, { icon: 'settings', label: 'Gyorsmenü', value: 'quick' }],
+    });
+    exitAsking = false;
+    void name;
+    updateAppHints();
+    if (v === 'exit') { if (B.app) closeApp(); else { closePage(); setTab('home'); } return; }
+    if (v === 'quick') { openQuick(); return; }
+    if (v === 'bg') { backgroundApp(); return; }
+    if (wasPage && B.showPage) enterPage();
   }
 
   function navigate(url, { focusPage = true } = {}) {
@@ -129,6 +437,7 @@ const Browser = (() => {
   // A kurzor és a kilépési sáv ezért "popover" (szintén legfelső réteg, a webview fölött).
   function setFullscreen(v) {
     B.fullscreen = v;
+    setTimeout(updateAppHints, 0);
     document.body.classList.toggle('br-fs', v || B.hideBar);
     if (v && B.mode !== 'page') enterPage();
     showFsBar(v);
@@ -150,7 +459,7 @@ const Browser = (() => {
   // A legfelső rétegben a később megjelenített elem van felül: a teljes képernyőre váltás után a
   // popovereket újra megnyitjuk, hogy a teljes képernyős weboldal fölé kerüljenek
   function restack() {
-    for (const id of ['br-fs-bar', 'br-cursor']) {
+    for (const id of ['br-fs-bar', 'br-app-hints', 'br-cursor']) {
       const e = el(id);
       try { if (e && e.matches(':popover-open')) { e.hidePopover(); e.showPopover(); } } catch { /* */ }
     }
@@ -295,6 +604,7 @@ const Browser = (() => {
     cancelAnimationFrame(B.raf);
     B.raf = requestAnimationFrame(padLoop);
     renderHints();
+    updateAppHints();
   }
   function leavePage({ focus = true } = {}) {
     if (B.mode !== 'page') return;
@@ -304,7 +614,7 @@ const Browser = (() => {
     el('screen-browser').classList.remove('page-mode');
     placeCursor();
     if (B.fullscreen) exitFullscreen();
-    if (B.hideBar) { B.hideBar = false; document.body.classList.toggle('br-fs', B.fullscreen); }
+    if (B.hideBar && !B.app) { B.hideBar = false; document.body.classList.toggle('br-fs', B.fullscreen); }
     try { document.activeElement && document.activeElement.blur(); window.focus(); } catch { /* */ }
     Nav.suspend(false);
     if (focus && S.tab === 'browser') requestAnimationFrame(() => Nav.focus(el('br-page'), { silent: true }));
@@ -343,9 +653,55 @@ const Browser = (() => {
   }
 
   const BTN_REPEAT = new Set([12, 13, 14, 15]);
+  // felhős játék közben csak a Guide gombot figyeljük (a többi a játéké, a Gamepad API-n át)
+  let guidePrev = false;
+  function pollGuideOnly() {
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+    const g = pads.some((p) => p.buttons[16] && p.buttons[16].pressed);
+    if (g && !guidePrev) confirmExit();
+    guidePrev = g;
+  }
+  // videós oldalon a lejátszó kontrollerrel: Ⓨ lejátszás/szünet, LB/RB ±10 mp, LT/RT hangerő, Ⓧ teljes képernyő,
+  // teljes képernyőn Ⓐ is lejátszás/szünet (a D-pad ott a lejátszó saját nyilaié: tekerés, hangerő)
+  const player = (cmd, arg = 0) => (B.wv && B.ready ? B.wv.executeJavaScript(`window.__inxPlayer ? window.__inxPlayer(${JSON.stringify(cmd)}, ${Number(arg) || 0}) : null`, true).then((st) => { if (st) { B.vstate = st; updateAppHints(); } }).catch(() => {}) : null);
+  function playerButton(i) {
+    const v = B.vstate;
+    if (!v || !v.has) return false;
+    if (i === 3) { player('toggle'); return true; }
+    if (i === 2) { player('fs'); return true; }
+    if (i === 6) { player('seek', -10); return true; }
+    if (i === 7) { player('seek', 10); return true; }
+    if (i === 11) { player('mute'); return true; }
+    if (i === 0 && B.fullscreen) { player('toggle'); return true; }
+    return false;
+  }
+
+  // térkép nagyítás: görgő a térkép közepén (minden térképes oldalon működik)
+  // Térkép vezérlés: ha az oldalon Leaflet-térkép van (Windy), annak API-ján; különben billentyűkkel (Google Maps)
+  const MAP_JS = `(window.W && W.map && (W.map.map || W.map)) || null`;
+  function mapCmd(kind, a = 0, b = 0) {
+    if (!B.wv || !B.ready) return;
+    const w = B.wv;
+    w.executeJavaScript(`(() => { const m = ${MAP_JS}; if (!m) return false; ${kind === 'zoom' ? `a > 0 ? m.zoomIn() : m.zoomOut()`.replace(/a > 0/, String(a > 0)) : `m.panBy([${a}, ${b}])`}; return true; })()`, true)
+      .then((ok) => {
+        if (ok) return;
+        if (kind === 'zoom') sendKey(a > 0 ? '=' : '-');
+        else sendKey(a > 0 ? 'Right' : a < 0 ? 'Left' : b > 0 ? 'Down' : 'Up');
+      }).catch(() => {});
+  }
+  const mapZoom = (d) => mapCmd('zoom', d);
   function onButton(i, phase) {
     if (phase === 'up') { if (i === 0 && B.mouseDown) sendMouse('mouseUp'); return; }
     S.lastInput = Date.now();
+    if (i === 16) { confirmExit(); return; } // Guide: kilépés megerősítéssel – mindig (teljes képernyős videóban is)
+    if (B.app && B.app.rawPad) return; // felhős játék: minden más gomb a játéké
+    if (B.app && playerButton(i)) return;
+    if (B.app && i === 8) { confirmExit(); return; }
+    if (B.app && i === 9 && !B.fullscreen) { appSwitcher(); return; }
+    // térkép appok: LT/RT nagyítás (a D-pad nyilakkal mozgat, a bal kar kurzor, Ⓐ kattint)
+    if (B.app && B.app.map && (i === 6 || i === 7)) { mapZoom(i === 7 ? 1 : -1); return; }
+    if (B.app && B.app.map && i >= 12 && i <= 15) { const st = 160; mapCmd('pan', i === 14 ? -st : i === 15 ? st : 0, i === 12 ? -st : i === 13 ? st : 0); return; }
+    if (B.app && i === 1 && !B.fullscreen && !(B.wv && B.ready && B.wv.canGoBack())) { confirmExit(); return; }
     switch (i) {
       case 0: B.curVisible = true; placeCursor(); sendMouse('mouseDown'); break;
       case 1:
@@ -366,13 +722,13 @@ const Browser = (() => {
       case 13: sendKey('Down'); break;
       case 14: sendKey('Left'); break;
       case 15: sendKey('Right'); break;
-      case 16: leavePage(); openQuick(); break;
       default: break;
     }
   }
 
   function padLoop(t) {
     if (B.mode !== 'page') return;
+    if (B.app && B.app.rawPad) { pollGuideOnly(); B.raf = requestAnimationFrame(padLoop); return; }
     const dt = Math.min(0.05, (t - B.lastT) / 1000);
     B.lastT = t;
     const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
@@ -440,6 +796,7 @@ const Browser = (() => {
   // ---------- Menük ----------
   async function menu() {
     const items = [];
+    if (B.app) items.push({ icon: 'close', label: `Kilépés: ${B.app.title}`, value: 'close-app', kind: 'danger' });
     if (S.loginStore) items.push({ label: `Bejelentkezés megszakítása (${STORE_LABEL[S.loginStore]})`, value: 'cancel-login', kind: 'danger' });
     if (B.showPage) {
       items.push({ label: isBookmarked() ? '★ Könyvjelző eltávolítása' : '☆ Könyvjelző hozzáadása', value: 'star' });
@@ -453,6 +810,7 @@ const Browser = (() => {
     items.push({ label: 'Bezárás', value: null });
     const v = await modal({ title: B.showPage ? (B.title || 'Böngésző') : 'Böngésző', body: B.showPage ? B.url : '', items });
     if (v === 'cancel-login') { cancelLogin(); closePage(); loginFinished(); return; }
+    if (v === 'close-app') { closeApp(); return; }
     if (v === 'star') toggleBookmark();
     else if (v === 'zin') zoomStep(1);
     else if (v === 'zout') zoomStep(-1);
@@ -524,11 +882,13 @@ const Browser = (() => {
     return {
       y: () => { promptAddress(); return true; },
       x: () => { if (B.showPage) enterPage(); return true; },
-      start: () => { menu(); return true; },
+      start: () => { if (B.app || openApps().length) appSwitcher(); else menu(); return true; },
+      guide: () => { if (B.showPage || B.app) { confirmExit(); return true; } return false; },
       'edge-down': () => { if (B.showPage) enterPage(); },
       lt: () => back(), rt: () => forward(),
       b: () => {
         if (B.showPage && back()) { Sound.back(); return true; }
+        if (B.app) { confirmExit(); return true; } // az alkalmazás kezdőlapján: kilépés (megerősítéssel)
         if (B.showPage) { Sound.back(); B.showPage = false; render(); requestAnimationFrame(() => Nav.focus(el('br-search'), { silent: true })); return true; }
         return false; // a kezdőlapon a globális Vissza (→ Könyvtár)
       },
@@ -559,7 +919,10 @@ const Browser = (() => {
       else if (k === 'forward') forward();
       else if (k === 'reload') reload();
       else if (k === 'home') goHome();
-      else if (k === 'exit') leavePage();
+      else if (k === 'exit') confirmExit();
+      else if (k === 'esc' && B.app && !B.fullscreen) confirmExit();
+      else if (k === 'bar' && B.app) focusBar();
+      else if (k === 'switcher') appSwitcher();
       else if (k === 'exitfs') exitFullscreen();
     });
     gamo.on('browser:download', (d) => {
@@ -573,11 +936,14 @@ const Browser = (() => {
   }
 
   return {
-    init, render, handlers, hints, navigate, menu, leavePage, setBanner, closePage,
+    init, render, handlers, hints, navigate, menu, leavePage, setBanner, closePage, openApp, closeApp, confirmExit, APPS, backgroundApp, resumeApp, appMedia, appCmd,
+    get app() { return B.app; }, openApps, appSwitcher, showBrowser,
     // képernyővédő ne induljon videó közben vagy amíg az oldalt vezérlik
-    blocksSaver: () => S.tab === 'browser' && (B.playing || B.mode === 'page' && Date.now() - S.lastInput < 15 * 60000),
-    onTabLeave: () => leavePage({ focus: false }),
+    // előtérben futó app vagy lejátszás közben nincs képernyővédő
+    blocksSaver: () => (B.app && S.tab === 'browser') || openApps().some((a) => a.audible) || (B.vstate && B.vstate.has && !B.vstate.paused) || (S.tab === 'browser' && (B.playing || B.mode === 'page' && Date.now() - S.lastInput < 15 * 60000)),
+    // másik fülre lépve a futó app a háttérbe kerül (tovább szól)
+    onTabLeave: () => { if (B.app) backgroundApp({ toHome: false }); else leavePage({ focus: false }); },
     state: () => ({ mode: B.mode, url: B.url, title: B.title, showPage: B.showPage, ready: B.ready, loading: B.loading, zoom: B.zoom, cur: { ...B.cur }, fs: B.fullscreen }),
-    _test: { resolveInput, sendMouse, sendKey, enterPage, B },
+    _test: { resolveInput, sendMouse, sendKey, enterPage, mapZoom, onButton, B },
   };
 })();

@@ -1,0 +1,4 @@
+/* InariX – design system görgetősáv minden appban: a téma kiemelő színe.
+   Csak a színt állítjuk – ahol az oldal szándékosan elrejti a sávot, ott rejtve marad. */
+html { scrollbar-color: color-mix(in srgb, var(--inx-a2) 65%, transparent) transparent; scrollbar-width: thin; }
+* { scrollbar-color: color-mix(in srgb, var(--inx-a2) 65%, transparent) transparent; }

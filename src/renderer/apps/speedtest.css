@@ -1,0 +1,41 @@
+/* InariX – Sebességmérő app (fast.com), teljesen az InariX témájában (csak ezt a fájlt kell szerkeszteni) */
+html { background: radial-gradient(ellipse at 50% 38%, color-mix(in srgb, var(--inx-a1) 24%, var(--inx-bg)) 0%, var(--inx-bg) 62%) fixed !important; min-height: 100vh; }
+body, .wrapper, .header-container, [class*="header"], [class*="container"] { background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; }
+body { color: var(--inx-text) !important; }
+body * { font-family: var(--inx-font) !important; }
+/* felesleges elemek: logó, megosztás, súgó, „powered by” */
+.logo-container, [class*="logo"], .footer-container .help-container, #share-on-facebook-link, #share-on-twitter-link, #test-help-btn,
+.powered-by-container, .after-test-actions-container { display: none !important; }
+
+/* egy oszlopba rendezett eredmény-kártya */
+.speed-container { display: flex !important; flex-direction: column !important; align-items: center !important; gap: 10px !important; margin: 11vh auto 0 !important; width: auto !important; }
+.your-speed-message { order: 0; font-size: 30px !important; font-weight: 600 !important; color: var(--inx-muted) !important; letter-spacing: .02em; margin-bottom: 6px !important; }
+.speed-left-container, .speed-right-container { display: block !important; float: none !important; width: auto !important; text-align: center !important; }
+.speed-left-container { order: 1; }
+.speed-right-container { order: 2; display: flex !important; flex-direction: column !important; align-items: center !important; gap: 22px !important; }
+#speed-value { font-size: 210px !important; font-weight: 800 !important; line-height: 1 !important;
+  background: var(--inx-grad); -webkit-background-clip: text; background-clip: text; color: transparent !important; }
+#speed-units { font-size: 44px !important; font-weight: 700 !important; color: var(--inx-text) !important; position: static !important; }
+/* újraindítás / állapot jelző: kerek, a téma színátmenetével */
+.speed-progress-indicator-container { position: static !important; }
+#speed-progress-indicator { width: 86px !important; height: 86px !important; border-radius: 50% !important; border: 3px solid var(--inx-a2) !important;
+  display: flex !important; align-items: center !important; justify-content: center !important; background: transparent !important; }
+#speed-progress-indicator.succeeded { background: var(--inx-grad) !important; border-color: transparent !important; box-shadow: 0 10px 40px color-mix(in srgb, var(--inx-a1) 45%, transparent); }
+#speed-progress-indicator-icon { color: #fff !important; font-size: 40px !important; }
+#speed-progress-indicator .spinner { border-color: var(--inx-a2) transparent transparent transparent !important; }
+
+/* „További információ” – InariX panel gomb, a részletek kártyán */
+.more-info-container { background: none !important; border: 0 !important; margin-top: 40px !important; }
+#show-more-details-link { display: inline-block !important; font-size: 22px !important; font-weight: 700 !important; color: var(--inx-text) !important; text-decoration: none !important;
+  padding: 14px 34px !important; border-radius: var(--inx-radius) !important; background: var(--inx-panel) !important; border: 1px solid var(--inx-line) !important; }
+.extra-details-container { background: var(--inx-panel) !important; border: 1px solid var(--inx-line) !important; border-radius: var(--inx-radius) !important;
+  padding: 26px 36px !important; margin: 26px auto !important; max-width: 980px; font-size: 21px !important; color: var(--inx-text) !important; }
+.extra-details-container [class*="value"], .extra-details-container .speed-results-container { color: var(--inx-a2) !important; -webkit-text-fill-color: var(--inx-a2) !important; font-size: 46px !important; font-weight: 800 !important; background: none !important; }
+.extra-details-container [class*="units"], .extra-details-container [class*="label"], .extra-details-container [class*="title"] { color: var(--inx-muted) !important; }
+#show-less-details-link { display: none !important; }
+/* a szám és a mértékegység + gomb közös tárolója: egy oszlopban, középre */
+:has(> .speed-left-container) { display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; width: 100% !important; }
+.speed-right-container { flex-direction: row !important; gap: 34px !important; margin-top: 4px !important; }
+.speed-right-container > * { float: none !important; position: static !important; margin: 0 !important; }
+.more-info-container, .extra-details-container { order: 5 !important; } .speed-left-container, .speed-right-container { margin-left: 0 !important; margin-right: 0 !important; }
+.speed-controls-container > .test-context-container { order: 5 !important; width: 100% !important; text-align: center !important; margin-top: 30px !important; }

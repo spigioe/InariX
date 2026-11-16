@@ -1,0 +1,38 @@
+/* InariX – Twitch app: kontrollerre optimalizált, az InariX témájához igazodó megjelenés (csak ezt a fájlt kell szerkeszteni) */
+/* színek: a Twitch sötét témájának változói az InariX témából */
+:root, .tw-root--theme-dark {
+  --color-background-base: var(--inx-bg) !important;
+  --color-background-body: var(--inx-bg) !important;
+  --color-background-alt: var(--inx-panel) !important;
+  --color-background-alt-2: var(--inx-panel2) !important;
+  --color-background-float: var(--inx-panel) !important;
+  --color-background-input: var(--inx-panel) !important;
+  --color-background-button-primary-default: var(--inx-a1) !important;
+  --color-background-button-primary-hover: var(--inx-a2) !important;
+  --color-text-link: var(--inx-a2) !important;
+  --color-fill-brand: var(--inx-a2) !important;
+  --color-border-base: var(--inx-line) !important;
+  --border-radius-medium: var(--inx-radius-sm) !important;
+  --border-radius-large: var(--inx-radius) !important;
+  --color-text-base: var(--inx-text) !important;
+  --color-text-alt: var(--inx-muted) !important;
+  --color-text-alt-2: var(--inx-muted) !important;
+  --color-text-header: var(--inx-text) !important;
+  --color-text-label: var(--inx-text) !important;
+  --color-text-button: var(--inx-text) !important;
+  --color-text-input: var(--inx-text) !important;
+  --color-text-tooltip: var(--inx-text) !important;
+  --color-text-overlay: #fff !important;
+  --color-fill-current: var(--inx-text) !important;
+}
+body { color: var(--inx-text) !important; }
+body, .tw-root--theme-dark body { background: var(--inx-bg) !important; }
+/* zavaró elemek */
+[data-a-target="top-nav-get-bits-button"], .top-nav__prime, [data-test-selector="bits-balance-string"], .tw-promotion,
+[class*="PromotedContent"], [data-a-target="side-nav-arrow"] { display: none !important; }
+/* nagyobb betűk */
+[data-a-target="preview-card-title-link"] h3, [data-a-target="stream-title"] { font-size: 19px !important; line-height: 26px !important; }
+[data-a-target="preview-card-channel-link"], [data-a-target="preview-card-game-link"] { font-size: 16px !important; }
+input[type="search"] { font-size: 18px !important; }
+/* képek a téma lekerekítésével */
+[data-a-target^="preview-card-image"] img, .tw-image { border-radius: var(--inx-radius-sm) !important; }

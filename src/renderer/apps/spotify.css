@@ -1,0 +1,25 @@
+/* InariX – Spotify app (open.spotify.com): kontrollerre, TV-re optimalizált, az InariX témájához igazodó megjelenés
+   (csak ezt a fájlt kell szerkeszteni) */
+:root, .encore-dark-theme, .encore-base-set {
+  --background-base: var(--inx-bg) !important;
+  --background-highlight: var(--inx-panel2) !important;
+  --background-press: var(--inx-panel) !important;
+  --background-elevated-base: var(--inx-panel) !important;
+  --background-elevated-highlight: var(--inx-panel2) !important;
+  --background-tinted-base: var(--inx-panel) !important;
+  --essential-bright-accent: var(--inx-a2) !important;
+  --decorative-base: var(--inx-a2) !important;
+  --text-bright-accent: var(--inx-a2) !important;
+}
+body, #main, .Root__top-container { background: var(--inx-bg) !important; }
+.Root__nav-bar, .Root__main-view, .Root__right-sidebar, [data-testid="root"] > div { border-radius: var(--inx-radius) !important; }
+.Root__now-playing-bar, [data-testid="now-playing-bar"] { background: var(--inx-panel) !important; }
+/* nagyobb betűk */
+[data-testid="tracklist-row"] [data-encore-id="text"], [data-encore-id="card"] [data-encore-id="text"] { font-size: 16px !important; }
+[data-testid="tracklist-row"] { min-height: 62px !important; }
+[data-testid="now-playing-widget"] [data-encore-id="text"] { font-size: 16px !important; }
+/* zavaró elemek: letöltés / prémium reklám */
+[data-testid="upgrade-button"], [href*="/download"], [data-testid="install-app-button"], [data-testid="premium-promo"] { display: none !important; }
+/* lejátszó: a téma kiemelő színe */
+[data-testid="control-button-playpause"] { background: var(--inx-grad) !important; color: #fff !important; }
+[data-testid="playback-progressbar"] [data-testid="progress-bar"] { --fg-color: var(--inx-a2) !important; }

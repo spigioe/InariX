@@ -1,0 +1,8 @@
+/* InariX – Hírek (Google Hírek): sötét megjelenés színfordítással (a Google Hírek nem követi a sötét színsémát),
+   a képek eredeti színűek; nagyobb betűk. Csak ezt a fájlt kell szerkeszteni. */
+html { filter: invert(.9) hue-rotate(180deg); background: #fff !important; }
+img, video, picture, svg image, [style*="background-image"] { filter: invert(1) hue-rotate(180deg); }
+article { border-radius: var(--inx-radius) !important; }
+article a, article h4, article [role="heading"] { font-size: 19px !important; line-height: 26px !important; }
+article time { font-size: 15px !important; }
+article img, figure img { border-radius: var(--inx-radius-sm) !important; }

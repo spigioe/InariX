@@ -1,7 +1,7 @@
 'use strict';
 // Beépített böngésző (fő folyamat oldal): elkülönített munkamenet, biztonsági korlátok, letöltések.
 // A megjelenítés a renderer <webview> elemében történik (src/renderer/browser.js).
-const { app, session, shell } = require('electron');
+const { app, session, shell, nativeTheme } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -29,6 +29,8 @@ function uniquePath(dir, name) {
 }
 
 function setupBrowser({ getWin, sendUI, log, onWebview }) {
+  // a weboldalak a sötét színsémát kapják (prefers-color-scheme: dark) – az InariX felülete is sötét
+  nativeTheme.themeSource = 'dark';
   const ses = session.fromPartition(PARTITION);
   ses.setUserAgent(chromeUA());
   ses.setPermissionRequestHandler((_wc, perm, cb) => cb(ALLOWED_PERMISSIONS.has(perm)));
@@ -91,7 +93,12 @@ function setupBrowser({ getWin, sendUI, log, onWebview }) {
       else if (k === 'F5') { ev.preventDefault(); sendUI('browser:key', 'reload'); }
       else if (input.alt && k === 'Home') { ev.preventDefault(); sendUI('browser:key', 'home'); }
       else if (k === 'Escape' && htmlFs) { ev.preventDefault(); wc.executeJavaScript('document.fullscreenElement && document.exitFullscreen()', true).catch(() => {}); sendUI('browser:key', 'exitfs'); }
-      else if (k === 'Escape' && input.shift) { ev.preventDefault(); sendUI('browser:key', 'exit'); }
+      // kilépés (megerősítéssel): Shift+Esc, vagy hosszan nyomott Esc
+      else if (k === 'Escape' && (input.shift || input.isAutoRepeat)) { ev.preventDefault(); sendUI('browser:key', 'exit'); }
+      // sima Esc: az appokban kilépés (megerősítéssel) – a renderer dönti el, hogy app fut-e; az oldal is megkapja
+      else if (k === 'Escape') sendUI('browser:key', 'esc');
+      else if (k === 'F10') { ev.preventDefault(); sendUI('browser:key', 'bar'); }
+      else if (k === 'F9') { ev.preventDefault(); sendUI('browser:key', 'switcher'); }
       else if (k === 'F12') { ev.preventDefault(); wc.toggleDevTools(); }
     });
   });

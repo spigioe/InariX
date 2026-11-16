@@ -1,0 +1,24 @@
+/* InariX – YouTube Music app: kontrollerre optimalizált, az InariX témájához igazodó megjelenés (csak ezt a fájlt kell szerkeszteni) */
+:root, ytmusic-app {
+  --ytmusic-background: var(--inx-bg) !important;
+  --ytmusic-general-background-a: var(--inx-bg) !important;
+  --ytmusic-general-background-b: var(--inx-bg) !important;
+  --ytmusic-general-background-c: var(--inx-panel) !important;
+  --ytmusic-brand-background-solid: var(--inx-bg) !important;
+  --ytmusic-player-bar-background: var(--inx-panel) !important;
+  --yt-spec-base-background: var(--inx-bg) !important;
+  --yt-spec-raised-background: var(--inx-panel) !important;
+  --yt-spec-call-to-action: var(--inx-a2) !important;
+}
+body, ytmusic-app, ytmusic-app-layout, #layout { background: var(--inx-bg) !important; }
+ytmusic-nav-bar, #nav-bar-background { background: var(--inx-bg) !important; }
+ytmusic-player-bar { background: var(--inx-panel) !important; height: 96px !important; }
+ytmusic-mealbar-promo-renderer, ytmusic-statement-banner-renderer, #mini-guide, ytmusic-guide-renderer[mini-guide] { display: none !important; }
+ytmusic-search-box input { font-size: 20px !important; }
+.title.ytmusic-two-row-item-renderer, ytmusic-responsive-list-item-renderer .title { font-size: 18px !important; line-height: 25px !important; }
+ytmusic-carousel-shelf-renderer h2, ytmusic-shelf-renderer h2 { font-size: 28px !important; }
+ytmusic-player-bar .title { font-size: 18px !important; }
+ytmusic-chip-cloud-chip-renderer a, ytmusic-chip-cloud-chip-renderer .gradient-box { background: var(--inx-panel) !important; border-radius: var(--inx-radius-sm) !important; }
+ytmusic-chip-cloud-chip-renderer[is-selected] a { background: var(--inx-grad) !important; color: #fff !important; }
+ytmusic-two-row-item-renderer img, ytmusic-thumbnail-renderer img { border-radius: var(--inx-radius-sm) !important; }
+#progress-bar { --paper-slider-active-color: var(--inx-a2) !important; --paper-slider-knob-color: var(--inx-a2) !important; }

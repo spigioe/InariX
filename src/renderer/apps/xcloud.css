@@ -1,0 +1,3 @@
+/* InariX – Xbox Cloud Gaming app (xbox.com/play). A felület már eleve kontrollerre készült;
+   itt csak apróságok (csak ezt a fájlt kell szerkeszteni). A kontroller közvetlenül a játéké, az InariX-é csak a Guide. */
+[class*="CookieBanner"], [id*="onetrust"], #uhfCookieAlert { display: none !important; }

@@ -1,0 +1,5 @@
+/* InariX – GeForce NOW app. A felület kontrollerre készült; a kontroller a játéké, az InariX-é csak a Guide gomb
+   (kilépés / háttérbe). Csak ezt a fájlt kell szerkeszteni. */
+body { background: var(--inx-bg) !important; }
+/* „töltsd le az alkalmazást” sáv */
+[class*="download-banner"], [class*="DownloadBanner"], gfn-download-banner, .mat-toolbar + [class*="banner"] { display: none !important; }

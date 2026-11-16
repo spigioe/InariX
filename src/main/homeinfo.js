@@ -2,7 +2,8 @@
 // Kezdőképernyő és gyors beállítások adatforrásai (a renderer CSP-je miatt a fő folyamatban kérdezzük le):
 // játékhírek (Steam), kívánságlista akciók, időjárás (Open-Meteo, kulcs nélkül), internetes rádiók (radio-browser.info),
 // médiagombok (Spotify / bármely lejátszó), fényerő (laptop kijelző), kontroller akkumulátor (XInput).
-const { run } = require('../core/util');
+const path = require('path');
+const { run, openUri } = require('../core/util');
 
 async function fetchJson(url, ms = 8000) {
   const ac = new AbortController();
@@ -63,9 +64,9 @@ function weather(city) {
 
 // Népszerű internetes rádiók (alapból magyarok)
 function radios(country = 'HU') {
-  return cached(`radio:${country}`, 6 * 3600000, async () => {
+  return cached(`radio2:${country}`, 6 * 3600000, async () => {
     const j = await fetchJson(`https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/${encodeURIComponent(country)}?order=clickcount&reverse=true&limit=25&hidebroken=true`);
-    return j.filter((s) => s.url_resolved && /^https:/i.test(s.url_resolved)).map((s) => ({ name: s.name.trim(), url: s.url_resolved, tags: s.tags || '' })).slice(0, 20);
+    return j.filter((s) => s.url_resolved && /^https:/i.test(s.url_resolved)).map((s) => ({ name: s.name.trim(), url: s.url_resolved, tags: s.tags || '', logo: /^https:/i.test(s.favicon || '') ? s.favicon : '' })).slice(0, 20);
   });
 }
 
@@ -100,4 +101,34 @@ async function padBattery() {
   });
 }
 
-module.exports = { news, weather, radios, mediaKey, brightness, padBattery };
+// ---- Spotify (asztali alkalmazás) ----
+// Most szól + vezérlés a Windows médiavezérlőjén (SMTC) át; megnyitás / keresés / kedvelt dalok a spotify: linkekkel.
+// (A Spotify Web API saját fejlesztői regisztrációt igényelne, a webes lejátszó az Electronban nem játszik le védett tartalmat.)
+const NOWPLAYING = path.join(__dirname, 'helpers', 'nowplaying.ps1').replace('app.asar', 'app.asar.unpacked');
+async function nowPlaying(action = 'info', art = false) {
+  const a = ['toggle', 'play', 'pause', 'next', 'prev', 'shuffle'].includes(action) ? action : 'info';
+  const r = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', NOWPLAYING, '-Action', a, ...(art ? ['-Art'] : [])], { timeout: 12000 });
+  try { return JSON.parse(r.stdout.trim().split(/\r?\n/).pop()); } catch { return { session: false }; }
+}
+async function spotifyInstalled() {
+  const r = await run('reg', ['query', 'HKCR\\spotify']);
+  return r.code === 0;
+}
+// kind: app | liked | search (q) ; play: a megnyitás után a lejátszás elindítása
+async function spotifyOpen(kind, q, play) {
+  if (!(await spotifyInstalled())) throw new Error('A Spotify nincs telepítve ezen a gépen');
+  const uri = kind === 'liked' ? 'spotify:collection:tracks' : kind === 'search' && q ? `spotify:search:${encodeURIComponent(String(q).trim())}` : 'spotify:';
+  openUri(uri);
+  if (play) {
+    // a Spotify-nak idő kell, amíg elindul és betölti a listát
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const np = await nowPlaying('info').catch(() => null);
+      if (np && np.spotify) { if (!np.playing) await nowPlaying('play').catch(() => {}); break; }
+    }
+  }
+  return true;
+}
+function spotifyInstall() { openUri('ms-windows-store://pdp/?productid=9NCBCSZSJRSB'); return true; }
+
+module.exports = { news, weather, radios, mediaKey, brightness, padBattery, nowPlaying, spotifyInstalled, spotifyOpen, spotifyInstall };

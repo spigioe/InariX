@@ -15,7 +15,18 @@ function settingsHandlers() {
       return rowCycle(1, renderSettings);
     },
     b: () => { if (!inPane()) return false; Sound.back(); return toCat(); },
+    // a kategórialistában fel/le csak a listán belül lép (az utolsón lefelé nem ugrik át a jobb oldali panelre)
+    down: () => catStep(1),
+    up: () => catStep(-1),
   };
+  function catStep(d) {
+    const c = Nav.current();
+    if (!c || !c.closest('.set-nav')) return false;
+    const list = [...document.querySelectorAll('.set-nav .set-cat')];
+    const n = list[list.indexOf(c) + d];
+    if (n) Nav.focus(n);
+    return true;
+  }
 }
 
 async function save(partial) {

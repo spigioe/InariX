@@ -47,6 +47,7 @@ function renderRows(container, rows, rerender) {
     if (!row) return;
     if (row.group) { container.append(h('div', { class: 'set-group' }, row.group)); return; }
     if (row.type === 'note') { container.append(h('div', { class: 'set-note' }, row.label)); return; }
+    if (row.type === 'node') { container.append(row.node); return; }
     const lbl = h('div', { class: 'lbl' }, row.label, row.desc ? h('small', {}, row.desc) : null);
     const ico = row.icon ? h('span', { class: 'row-ico', style: row.icon.color ? `background:${row.icon.color}` : '' }, row.icon.text || '') : null;
     let right;
@@ -68,7 +69,7 @@ function renderRows(container, rows, rerender) {
       else if (row.type === 'slider' && row.side && ev.detail === 0) row.side.run(); // kontroller Ⓐ / Enter: a sor gombja (pl. némítás)
       else if (row.type === 'slider') rowCycle(1, rerender);
       else if (row.type === 'text') {
-        const v = await OSK.prompt({ title: row.label, value: row.get() || '' });
+        const v = await OSK.prompt({ title: row.label, value: row.get() || '', numeric: !!row.numeric, password: !!row.password });
         if (v !== null) await applyRow(row, v, rerender);
       } else if (row.type === 'action') {
         try { await row.run(); } catch (e) { toast(e.message, 'err'); }

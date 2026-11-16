@@ -41,10 +41,27 @@ async function openQuick() {
   if (st && S.quickOpen) { S.state.hostInfo = st.hostInfo; renderQuick(); }
 }
 
+// Lejátszó a gyorsmenüben: mi szól most + előző / lejátszás-szünet / következő; ha semmi, zenelejátszók ajánlása
+function quickPlayer() {
+  const np = S.quickNow;
+  const btn = (icon, title, fn, cls = '') => h('button', { class: `qp-btn focusable ${cls}`, title, dataset: { idx: `qp-${icon === 'pause' ? 'play' : icon}` }, onclick: async () => { await fn(); setTimeout(refreshNow, 500); } }, uiIcon(icon));
+  const refreshNow = async () => { S.quickNow = await nowPlayingAny(); if (S.quickOpen) renderQuick(); };
+  if (!np) {
+    const offer = (icon, label, fn) => h('button', { class: 'qp-offer focusable', onclick: () => { closeQuick(); fn(); } }, uiIcon(icon), label);
+    return h('div', { class: 'qp' }, h('div', { class: 'qp-info' }, h('b', {}, 'Most nem szól semmi'), h('small', {}, 'Indíts zenét:')),
+      h('div', { class: 'qp-row' }, offer('music', 'Spotify', () => Browser.openApp('spotify')), offer('music', 'YouTube Music', () => Browser.openApp('ytmusic')), offer('radio', 'Rádió', radioMenu)));
+  }
+  return h('div', { class: 'qp' },
+    h('div', { class: 'qp-top' }, h('span', { class: `qp-art${np.art ? '' : ' empty'}` }, np.art ? h('img', { src: np.art, alt: '' }) : uiIcon(np.kind === 'radio' ? 'radio' : 'music')),
+      h('div', { class: 'qp-info' }, h('small', {}, np.src + (np.playing ? '' : ' · szünetel')), h('b', {}, np.title), np.sub ? h('span', {}, np.sub) : null)),
+    h('div', { class: 'qp-row' }, btn('prev', 'Előző', () => mediaCmd(np, 'prev')), btn(np.playing ? 'pause' : 'play', np.playing ? 'Szünet' : 'Lejátszás', () => mediaCmd(np, 'toggle'), 'main'), btn('next', 'Következő', () => mediaCmd(np, 'next'))));
+}
+
 // hangerő / fényerő / hálózat előtöltése (indításkor és a menü nyitásakor)
 async function prefetchQuick() {
   const [vol, net, bri, pads] = await Promise.all([gamo.volume('VOLGET').catch(() => null), gamo.network().catch(() => null), briAllowed() ? gamo.brightness().catch(() => null) : null, gamo.padBattery().catch(() => [])]);
   S.quickCache = { vol, net, bri, pads };
+  S.quickNow = await nowPlayingAny().catch(() => null);
 }
 setTimeout(() => prefetchQuick().catch(() => {}), 2500);
 // fényerő csak laptopon, és csak a beépített kijelzőn (külső kijelzőn a monitor saját gombja állítja)
@@ -79,6 +96,7 @@ function renderQuick() {
     rows.push({ type: 'slider', label: 'Fényerő', get: () => q.bri ?? 0, step: 10, fmt: (v) => (q.bri === null || q.bri === undefined ? '…' : `${v}%`),
       set: async (v) => { if (q.bri === null || q.bri === undefined) return true; q.bri = await gamo.brightness(v); S.quickCache = { ...S.quickCache, bri: q.bri }; } });
   }
+  rows.push({ type: 'node', node: quickPlayer() });
   rows.push({ type: 'toggle', label: 'Éjszakai mód', desc: 'Melegebb, kíméletesebb színek a InariX felületén', get: () => !!S.state.settings.ui.nightMode, set: (v) => ({ ui: { nightMode: v } }), after: () => applyNight() });
   rows.push({ type: 'select', label: 'Alvásidőzítő', options: [[0, 'Ki'], [15, '15 perc'], [30, '30 perc'], [60, '1 óra'], [90, '1,5 óra']], get: () => S.sleepMin || 0,
     set: (v) => { setSleepTimer(Number(v)); return true; } });
@@ -88,10 +106,6 @@ function renderQuick() {
     rows.push({ type: 'info', label: 'Akkumulátor', value: () => `${Math.round(S.battery.level * 100)}%${S.battery.charging ? ' · töltés' : ''}` });
   }
   for (const p of q.pads || []) rows.push({ type: 'info', label: `Kontroller ${p.index + 1}`, value: () => (p.wired ? 'vezetékes' : `akkumulátor: ${p.level}`) });
-  rows.push({ group: 'Zene' });
-  rows.push({ type: 'action', label: S.radio ? `♫ ${S.radio.name}` : '♫ Rádió és lejátszó', run: () => { closeQuick(); musicMenu(); } });
-  rows.push({ type: 'action', label: '⏯ Lejátszás / szünet', run: () => gamo.mediaKey('play') });
-  rows.push({ type: 'action', label: '⏭ Következő szám', run: () => gamo.mediaKey('next') });
   const remotes = S.lib.hosts.filter((x) => !x.local);
   if (remotes.length) {
     rows.push({ group: 'Gépek' });
@@ -101,14 +115,15 @@ function renderQuick() {
     }
   }
   rows.push({ group: 'Gyors elérés' });
-  rows.push({ type: 'action', label: '🎲 Véletlen játék', run: () => { closeQuick(); randomGame(); } });
+  rows.push({ type: 'action', label: 'Alkalmazások', value: () => 'YouTube · Twitch · Discord…', run: () => { closeQuick(); appsMenu(); } });
+  rows.push({ type: 'action', label: 'Véletlen játék', run: () => { closeQuick(); randomGame(); } });
   rows.push({ type: 'action', label: 'Statisztika', run: () => showStats() });
   rows.push({ type: 'action', label: 'Értesítések', value: () => String(NOTES.length), run: () => showNotes() });
   rows.push({ type: 'action', label: 'Diagnosztika', run: () => showDiagnostics() });
   rows.push({ type: 'action', label: 'Könyvtár frissítése', run: () => { closeQuick(); loadLibrary(true, true); } });
   rows.push({ group: 'Energia' });
   rows.push({ type: 'action', label: 'Vissza a Windows asztalra', desc: 'A InariX a háttérben fut tovább', run: () => { closeQuick(); gamo.hide(); } });
-  rows.push({ type: 'action', label: '⏻ Kilépés és energia…', value: () => 'kilépés · alvás · leállítás', run: () => { closeQuick(); exitMenu(); } });
+  rows.push({ type: 'action', label: 'Kilépés és energia…', value: () => 'kilépés · alvás · leállítás', run: () => { closeQuick(); exitMenu(); } });
   renderRows(panel.querySelector('.q-rows'), rows, renderQuick);
   if (!Nav.current() || !panel.contains(Nav.current())) Nav.focusFirst();
 }
@@ -260,7 +275,7 @@ async function filterMenu() {
     if (!S.lib.games.some(f.fn)) continue;
     items.push({ label: `${f.label} (${S.lib.games.filter(f.fn).length})`, value: k, kind: S.libFilter === k ? 'primary' : '' });
   }
-  items.push({ label: '🎲 Véletlen játék', value: '__random' });
+  items.push({ label: 'Véletlen játék', value: '__random' });
   const v = await modal({ title: 'Szűrés', items });
   if (!v) return;
   if (v === '__random') return randomGame();

@@ -1,0 +1,6 @@
+/* InariX – Időjárás radar (Windy): a térkép marad, a vezérlők a téma színeivel (csak ezt a fájlt kell szerkeszteni) */
+#plugin-premium, .premium-badge, #mobile-ovr-select, [data-do*="premium"], .footer-links { display: none !important; }
+#bottom, #embed-zoom, .rhpane, #search, #logo-wrapper { font-family: var(--inx-font) !important; }
+#search input, #q { font-size: 19px !important; border-radius: var(--inx-radius-sm) !important; }
+.rhpane .menu-item, #ovr-select a { border-radius: var(--inx-radius-sm) !important; }
+#ovr-select a.selected, .rhpane .selected { background: var(--inx-grad) !important; color: #fff !important; }

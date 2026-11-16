@@ -1,0 +1,8 @@
+/* InariX – Reddit app: a Reddit saját sötét témája (a böngésző sötét színsémát kér), a kiemelés a témából.
+   Csak ezt a fájlt kell szerkeszteni. */
+:root { --color-primary: var(--inx-a2) !important; --color-primary-background: var(--inx-a1) !important; --color-global-brand-orangered: var(--inx-a2) !important; }
+shreddit-post, article { border-radius: var(--inx-radius) !important; }
+shreddit-post [slot="title"], shreddit-post h1 { font-size: 22px !important; line-height: 30px !important; }
+[slot="text-body"], shreddit-post .md { font-size: 18px !important; line-height: 27px !important; }
+/* zavaró elemek: app letöltés, hirdetések */
+faceplate-tracker[noun="get_app"], [bundlename="app_selector"], shreddit-ad-post, shreddit-async-loader[bundlename="ads"], #xpromo-bottom-sheet, xpromo-app-selector { display: none !important; }

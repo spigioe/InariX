@@ -216,24 +216,98 @@ async function updateTopInfo() {
 let radioEl = null;
 function playRadio(st) {
   if (!radioEl) { radioEl = new Audio(); radioEl.addEventListener('error', () => { toast('A rádió nem játszható le', 'err'); S.radio = null; }); }
-  if (!st) { radioEl.pause(); radioEl.removeAttribute('src'); S.radio = null; return; }
+  if (!st) { radioEl.pause(); radioEl.removeAttribute('src'); S.radio = null; try { navigator.mediaSession.metadata = null; } catch { /* */ } return; }
   radioEl.src = st.url; radioEl.volume = 0.8;
   radioEl.play().then(() => { S.radio = st; toast(`♫ ${st.name}`, 'ok', 3000); if (S.tab === 'home') renderHome(); }).catch((e) => toast(`Rádió: ${e.message}`, 'err'));
+  // a Windows médiavezérlője (és a Zene panel) a csatorna nevét mutassa, ne csak azt, hogy „InariX”
+  try { navigator.mediaSession.metadata = new MediaMetadata({ title: st.name, artist: 'Internetes rádió', artwork: st.logo ? [{ src: st.logo }] : [] }); } catch { /* nem támogatott */ }
 }
-async function musicMenu() {
+// ---------------- Alkalmazások (teljes képernyős, konzolbarát webes appok a böngésző fiókjaival) ----------------
+// a natív (nem webes) appok az Alkalmazások között
+const NATIVE_APPS = {
+  browser: { title: 'Böngésző', sub: 'Web kontrollerrel', icon: 'browser', color: 'linear-gradient(135deg,#14b8a6,#0ea5e9)', run: () => Browser.showBrowser() },
+  radio: { title: 'Internetes rádió', sub: 'Magyar rádiók élőben', icon: 'radio', color: 'linear-gradient(135deg,#f59e0b,#b45309)', run: () => radioMenu() },
+};
+// app ikon: a design system vonalas ikonja az app saját színével, a téma panelszínén
+function appIcon(id, cls = '') {
+  const a = (Browser.APPS && Browser.APPS[id]) || NATIVE_APPS[id] || {};
+  const brand = (String(a.color || '').match(/#[0-9a-f]{6}/i) || ['#a1a1aa'])[0];
+  return h('span', { class: `app-ic ${cls}`, style: `--brand:${brand}` }, uiIcon(a.icon || 'apps'));
+}
+const appsView = () => { try { return localStorage.getItem('inx-apps-view') || 'grid'; } catch { return 'grid'; } };
+async function appsMenu(focusId) {
+  const open = new Map(Browser.openApps().map((a) => [a.id, a]));
+  const view = appsView();
+  const node = h('div', { class: `apps-list v-${view}` });
+  let pick = null, toggle = false;
+  const close = () => { const m = $('#modal-layer .menu-item:last-child'); if (m) m.click(); };
+  const all = [['browser', NATIVE_APPS.browser], ...Object.entries(Browser.APPS), ['radio', NATIVE_APPS.radio]];
+  for (const [id, a] of all) {
+    node.append(h('button', { class: 'app-card focusable', dataset: { id, ...(id === (focusId || 'youtube') ? { default: '1' } : {}) }, onclick: () => { pick = id; close(); } },
+      appIcon(id, view === 'grid' ? 'big' : ''), h('b', {}, a.title), view === 'card' ? h('small', {}, id === 'radio' && S.radio ? `Most: ${S.radio.name}` : a.sub || '') : null,
+    ));
+  }
+  const n = open.size;
+  await modal({
+    title: 'Alkalmazások', node, wide: true, noDefault: true,
+    body: `${n ? `${n} app megnyitva – ≡ (Start): váltás · ` : ''}Ⓨ: ${view === 'grid' ? 'kártya' : 'rács'} nézet`,
+    items: [{ label: 'Bezárás', value: null }],
+    handlers: { y: () => { toggle = true; close(); return true; }, start: () => { if (n) { pick = '#switch'; close(); } return true; } },
+  });
+  if (toggle) { try { localStorage.setItem('inx-apps-view', view === 'grid' ? 'card' : 'grid'); } catch { /* */ } const c = Nav.current(); return appsMenu(c && c.dataset && c.dataset.id); }
+  if (pick === '#switch') { Browser.appSwitcher(); return; }
+  if (pick && NATIVE_APPS[pick]) NATIVE_APPS[pick].run();
+  else if (pick) Browser.openApp(pick);
+}
+
+// ---------------- Zene: mi szól most (app → rádió → Windows lejátszó), vezérlés – a gyorsmenü használja ----------------
+const radioNow = () => (S.radio && radioEl ? { kind: 'radio', src: 'Rádió', title: S.radio.name, sub: 'Internetes rádió', playing: !radioEl.paused, art: S.radio.logo || null } : null);
+async function nowPlayingAny() {
+  // megnyitott app: ha szól (vagy épp szüneteltetett, de volt hangja)
+  if (Browser.openApps().length) {
+    const a = await Browser.appMedia().catch(() => null);
+    if (a && a.has && (a.audible || a.paused)) return { kind: 'app', src: a.appTitle, title: a.title || a.appTitle, sub: a.artist || '', playing: a.audible && !a.paused, art: a.art || null };
+  }
+  const r = radioNow();
+  if (r) return r;
+  const n = await gamo.nowPlaying('info', false).catch(() => null);
+  // a saját (InariX / Electron) munkamenetünk nem számít – a rádiót és az appokat fent már kezeltük
+  if (n && n.session && n.title && !/inarix|electron/i.test(`${n.app || ''} ${n.title}`)) return { kind: 'smtc', src: n.spotify ? 'Spotify' : 'Lejátszó', title: n.title, sub: n.artist || '', playing: n.playing, art: null };
+  return null;
+}
+async function mediaCmd(np, cmd) {
+  if (!np) return;
+  if (np.kind === 'app') { await Browser.appCmd(cmd); return; }
+  if (np.kind === 'radio') {
+    if (cmd === 'toggle') { if (radioEl.paused) radioEl.play().catch(() => {}); else radioEl.pause(); return; }
+    const list = await gamo.radios().catch(() => []);
+    const i = list.findIndex((x) => x.url === S.radio.url);
+    if (list.length) playRadio(list[(i + (cmd === 'next' ? 1 : -1) + list.length) % list.length]);
+    return;
+  }
+  const r = await gamo.nowPlaying(cmd).catch(() => null);
+  if (!r || !r.session) await gamo.mediaKey(cmd === 'toggle' ? 'play' : cmd).catch(() => {});
+}
+// Internetes rádió (az Alkalmazások közül)
+async function radioMenu() {
+  const list = await gamo.radios().catch((e) => { toast(e.message, 'err'); return []; });
   const items = [];
-  if (S.radio) items.push({ label: `⏹ Rádió leállítása (${S.radio.name})`, value: 'stop', kind: 'danger' });
-  items.push({ label: '📻 Internetes rádió…', value: 'radio', kind: S.radio ? '' : 'primary' });
-  items.push({ label: '⏯ Lejátszás / szünet (Spotify, böngésző, bármely lejátszó)', value: 'play' });
-  items.push({ label: '⏭ Következő szám', value: 'next' }, { label: '⏮ Előző szám', value: 'prev' }, { label: 'Bezárás', value: null });
-  const v = await modal({ title: 'Zene', items });
-  if (v === 'stop') { playRadio(null); if (S.tab === 'home') renderHome(); }
-  else if (v === 'radio') {
-    const list = await gamo.radios().catch((e) => { toast(e.message, 'err'); return []; });
-    if (!list.length) return;
-    const i = await modal({ title: 'Internetes rádió', wide: true, items: [...list.map((r, k) => ({ label: r.name, value: String(k) })), { label: 'Mégse', value: null }] });
-    if (i !== null && i !== undefined) playRadio(list[Number(i)]);
-  } else if (v) gamo.mediaKey(v).catch((e) => toast(e.message, 'err'));
+  if (S.radio) items.push({ icon: 'stop', label: `Leállítás: ${S.radio.name}`, value: 'stop', kind: 'danger' });
+  items.push(...list.map((r, k) => ({ icon: 'radio', label: r.name, value: String(k), def: S.radio && S.radio.url === r.url })), { label: 'Bezárás', value: null });
+  const v = await modal({ title: 'Internetes rádió', wide: true, items });
+  if (v === 'stop') playRadio(null);
+  else if (v !== null && v !== undefined) playRadio(list[Number(v)]);
+}
+// Spotify (asztali alkalmazás – az Alkalmazások közül)
+async function spotifyApp() {
+  const has = await gamo.spotifyInstalled().catch(() => false);
+  if (!has) {
+    if (await confirmBox('Spotify', 'A Spotify nincs telepítve ezen a gépen. Megnyissam a Microsoft Store-ban?', 'Telepítés')) gamo.spotifyInstall();
+    return;
+  }
+  if (S.radio) playRadio(null);
+  toast('Spotify megnyitása…', '', 3000);
+  gamo.spotifyOpen('app', null, false).catch((e) => toast(e.message, 'err'));
 }
 
 function renderHome() {
@@ -271,10 +345,9 @@ function renderHome() {
   const online = S.lib.hosts.filter((x) => !x.local && x.online);
   rows.push(h('div', { class: 'h-row', dataset: { first: '0' } }, h('div', { class: 'shelf h-shelf q-shelf' },
     quickTile({ id: 'store', label: 'Áruház', sub: 'Keresés és telepítés', glyph: 'store', color: 'linear-gradient(135deg,#0ea5e9,#6366f1)', onclick: () => setTab('store') }),
-    quickTile({ id: 'browser', label: 'Böngésző', sub: 'Web kontrollerrel', glyph: 'browser', color: 'linear-gradient(135deg,#14b8a6,#0ea5e9)', onclick: () => setTab('browser') }),
+    quickTile({ id: 'apps', label: 'Alkalmazások', sub: 'Böngésző, YouTube, Twitch, Discord…', glyph: 'apps', color: 'linear-gradient(135deg,#ef4444,#7c3aed)', onclick: () => appsMenu() }),
     quickTile({ id: 'desktop', label: 'Asztal', sub: online.length ? `${online[0].name} képernyője, egérrel` : 'Gaming PC asztala', glyph: 'desktop', color: 'linear-gradient(135deg,#a855f7,#ec4899)', onclick: chooseDesktopHost }),
     quickTile({ id: 'hosts', label: 'Gépek', sub: `${online.length} online`, glyph: 'hosts', color: 'linear-gradient(135deg,#f59e0b,#ef4444)', onclick: () => setTab('hosts') }),
-    quickTile({ id: 'music', label: 'Zene', sub: S.radio ? `▶ ${S.radio.name}` : 'Rádió és lejátszó vezérlés', glyph: 'music', color: 'linear-gradient(135deg,#f43f5e,#a855f7)', onclick: () => musicMenu() }),
     quickTile({ id: 'random', label: 'Véletlen játék', sub: 'Dobj egyet', glyph: 'random', color: 'linear-gradient(135deg,#22c55e,#84cc16)', onclick: () => randomGame() }),
     quickTile({ id: 'settings', label: 'Beállítások', sub: 'Fiókok, téma, kijelző', glyph: 'settings', color: 'linear-gradient(135deg,#64748b,#334155)', onclick: () => setTab('settings') }))));
 

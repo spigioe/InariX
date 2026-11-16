@@ -2,7 +2,9 @@
 // Képernyő-billentyűzet kontrollerhez (fizikai billentyűzettel is gépelhető).
 const OSK = (() => {
   // a sorok a beállított / felismert billentyűzetkiosztás szerint (KbLayout)
-  let value = '', shift = false, resolver = null, mask = false;
+  // számmező: számbillentyűzet (a ⇄ ABC / 123 gombbal bármikor váltható a normál billentyűzetre és vissza)
+  const NUM_ROWS = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['.', '0', '⌫'], ['ABC', '✓']];
+  let value = '', shift = false, resolver = null, mask = false, numMode = false;
   const el = (id) => document.getElementById(id);
 
   function render() {
@@ -10,7 +12,7 @@ const OSK = (() => {
     el('osk-value').textContent = v;
     document.querySelectorAll('#osk-keys .key[data-k]').forEach((k) => {
       const ch = k.dataset.k;
-      if (ch.length === 1 && !'␣✓⌫⇧'.includes(ch)) k.textContent = shift ? ch.toUpperCase() : ch;
+      if (ch.length === 1 && !'␣✓⌫⇧'.includes(ch)) k.textContent = shift && !numMode ? ch.toUpperCase() : ch;
       if (ch === '⇧') k.classList.toggle('primary', shift);
     });
   }
@@ -18,7 +20,9 @@ const OSK = (() => {
   function build() {
     const box = el('osk-keys');
     box.innerHTML = '';
-    const ROWS = KbLayout.oskRows();
+    const ROWS = numMode ? NUM_ROWS : KbLayout.oskRows();
+    if (!numMode) ROWS[ROWS.length - 1] = ['123', ...ROWS[ROWS.length - 1]];
+    box.classList.toggle('num', numMode);
     for (const row of ROWS) {
       const r = document.createElement('div');
       r.className = 'krow';
@@ -29,8 +33,9 @@ const OSK = (() => {
         if (k === '␣') { b.classList.add('w4'); b.textContent = 'Szóköz'; }
         else if (k === '✓') { b.classList.add('w2', 'primary'); b.textContent = 'Kész'; }
         else if (k === '⌫' || k === '⇧') { b.classList.add('w2'); b.textContent = k; }
+        else if (k === '123' || k === 'ABC') { b.classList.add('w2', 'mode'); b.textContent = k; b.title = k === '123' ? 'Számbillentyűzet' : 'Normál billentyűzet'; }
         else b.textContent = k;
-        if (k === ROWS[1][0]) b.dataset.default = '1';
+        if (numMode ? k === '5' : k === ROWS[1][0]) b.dataset.default = '1';
         b.addEventListener('click', () => press(k));
         r.appendChild(b);
       }
@@ -63,6 +68,7 @@ const OSK = (() => {
     else if (k === '⇧') shift = !shift;
     else if (k === '␣') value += ' ';
     else if (k === '✓') return done(true);
+    else if (k === '123' || k === 'ABC') { numMode = k === '123'; shift = false; build(); render(); requestAnimationFrame(() => { const d = el('osk-keys').querySelector('[data-default="1"]'); if (d) Nav.focus(d); }); return; }
     else { value += shift ? k.toUpperCase() : k; if (shift && /[a-zéáűőúöüóí]/.test(k)) shift = false; }
     render();
   }
@@ -85,10 +91,10 @@ const OSK = (() => {
   }
   new MutationObserver(() => { if (!el('osk').classList.contains('hidden')) renderHints(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
-  function prompt({ title = '', value: initial = '', password = false } = {}) {
+  function prompt({ title = '', value: initial = '', password = false, numeric = false } = {}) {
     return new Promise((resolve) => {
       resolver = resolve;
-      value = String(initial || ''); shift = false; mask = password;
+      value = String(initial || ''); shift = false; mask = password; numMode = !!numeric;
       el('osk-title').textContent = title;
       build(); render();
       el('osk').classList.remove('hidden');

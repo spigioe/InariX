@@ -1,0 +1,5 @@
+/* InariX – Térkép (Google Maps): a panelek a téma színeivel (csak ezt a fájlt kell szerkeszteni) */
+#searchbox, #omnibox-container .searchboxinput { font-size: 19px !important; border-radius: var(--inx-radius) !important; }
+#searchbox { background: var(--inx-panel) !important; }
+#searchbox input { color: var(--inx-text) !important; }
+.app-vertical-widget-holder button, #minimap, .widget-scene-imagery-render { border-radius: var(--inx-radius-sm) !important; }

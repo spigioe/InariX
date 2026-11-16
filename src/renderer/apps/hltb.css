@@ -1,0 +1,7 @@
+/* InariX – HowLongToBeat app: az oldal saját sötét témája (a böngésző sötét színsémát kér), a kiemelés a témából.
+   Csak ezt a fájlt kell szerkeszteni. */
+input { font-size: 20px !important; border-radius: var(--inx-radius-sm) !important; }
+a[class*="button"], button[class*="button"], [class*="Button_"] { border-radius: var(--inx-radius-sm) !important; }
+/* hirdetések */
+ins.adsbygoogle, [id^="div-gpt"], [id^="google_ads"], iframe[id^="google_ads"], [class*="ad_wrap"], [class*="AdWrap"], [class*="adhesion"], [id*="adhesion"],
+div:has(> iframe[src*="doubleclick"]), div:has(> [id^="google_ads"]) { display: none !important; }
