@@ -18,7 +18,7 @@ async function regGetDword(key, name) {
   return m ? parseInt(m[1], 16) : null;
 }
 
-function setupOverlay({ getWin, showConsole, log, getCfg, updateCfg, volume, runningLocal, quitLocal }) {
+function setupOverlay({ getWin, showConsole, log, getCfg, updateCfg, volume, runningLocal, quitLocal, isStreaming }) {
   let ov = null, perf = null, watcher = null, perfTimer = null, cpuPrev = null;
 
   // ---- Windows Game Bar: a Guide gomb ne nyissa meg, amíg a InariX fut (kilépéskor visszaállítjuk) ----
@@ -55,6 +55,8 @@ function setupOverlay({ getWin, showConsole, log, getCfg, updateCfg, volume, run
   }
 
   function onGuide() {
+    // stream közben az overlay a KLIENSEN nyílik (a stream menü) – a hoston nem lehetne vele interaktálni
+    if (isStreaming && isStreaming()) { if (ov && !ov.isDestroyed() && ov.isVisible()) hide(); return; }
     const win = getWin();
     // ha a InariX konzol van előtérben, ott a saját gyorsmenüje kezeli
     if (win && !win.isDestroyed() && win.isVisible() && win.isFocused()) return;

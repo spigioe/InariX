@@ -25,8 +25,12 @@ function rowCycle(dir, rerender) {
     applyRow(row, opts[(i + dir + opts.length) % opts.length][0], rerender);
     return true;
   }
+  // a sor melletti négyzetes gombról balra visszalépünk a csúszkára
+  if (el._sideOf) { if (dir < 0) { Nav.focus(el._sideOf); Sound.move(); } return true; }
   if (row.type === 'slider') {
     const step = row.step || 5, min = row.min ?? 0, max = row.max ?? 100;
+    // jobbra a maximumon túl: a sor melletti gombra lépünk
+    if (dir > 0 && row.side && el._side && Number(row.get()) >= max) { Nav.focus(el._side); Sound.move(); return true; }
     const v = Math.max(min, Math.min(max, (Number(row.get()) || 0) + dir * step));
     Sound.move();
     applyRow(row, v, rerender);
@@ -58,9 +62,10 @@ function renderRows(container, rows, rerender) {
     else right = h('div', { class: `val${row.mono ? ' mono' : ''}` }, row.value ? row.value() : (row.type === 'action' ? '›' : ''));
     const el = h('button', { class: `row-item focusable${row.danger ? ' danger' : ''}${row.cls ? ` ${row.cls}` : ''}`, dataset: { idx } }, ico, lbl, right);
     el._row = row;
-    el.addEventListener('click', async () => {
+    el.addEventListener('click', async (ev) => {
       if (row.type === 'toggle') await applyRow(row, !row.get(), rerender);
       else if (row.type === 'select') rowCycle(1, rerender);
+      else if (row.type === 'slider' && row.side && ev.detail === 0) row.side.run(); // kontroller Ⓐ / Enter: a sor gombja (pl. némítás)
       else if (row.type === 'slider') rowCycle(1, rerender);
       else if (row.type === 'text') {
         const v = await OSK.prompt({ title: row.label, value: row.get() || '' });
@@ -69,7 +74,14 @@ function renderRows(container, rows, rerender) {
         try { await row.run(); } catch (e) { toast(e.message, 'err'); }
       }
     });
-    container.append(el);
+    if (row.side) {
+      // csúszka + négyzetes gomb egy sor helyén
+      const sb = h('button', { class: `row-side focusable${row.side.active ? ' on' : ''}`, title: row.side.title || '', dataset: { idx: `${idx}s` }, onclick: (ev) => { ev.stopPropagation(); row.side.run(); } }, uiIcon(row.side.icon));
+      sb._row = row; sb._sideOf = el; el._side = sb;
+      el.classList.add('has-side');
+      container.append(h('div', { class: 'row-pair' }, el, sb));
+      requestAnimationFrame(() => { if (el.offsetHeight) { sb.style.width = `${el.offsetHeight}px`; sb.style.height = `${el.offsetHeight}px`; } }); // pontos négyzet: a sor magassága
+    } else container.append(el);
   });
   if (prevIdx !== null) {
     const el = container.querySelector(`[data-idx="${prevIdx}"]`);

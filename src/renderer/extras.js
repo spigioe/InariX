@@ -23,7 +23,9 @@ async function openQuick() {
     document.body.append(panel);
   }
   panel.classList.remove('hidden');
-  S.quick = { vol: null, net: null, sys: {} };
+  // az utoljára ismert értékekkel azonnal kirajzoljuk (nem ugrálnak be később a sorok), utána frissítjük
+  const c = S.quickCache || {};
+  S.quick = { vol: c.vol || null, net: c.net || null, bri: c.bri ?? null, pads: c.pads || [], sys: {} };
   renderQuick();
   Nav.push(() => $('#quick .q-rows'), {
     b: () => { Sound.back(); closeQuick(); },
@@ -31,12 +33,24 @@ async function openQuick() {
     left: () => rowCycle(-1, renderQuick), right: () => rowCycle(1, renderQuick),
     lb: () => true, rb: () => true,
   });
-  const [vol, net, bri, pads] = await Promise.all([gamo.volume('VOLGET').catch(() => null), gamo.network().catch(() => null), gamo.brightness().catch(() => null), gamo.padBattery().catch(() => [])]);
+  await prefetchQuick();
   if (!S.quickOpen) return;
-  S.quick.vol = vol; S.quick.net = net; S.quick.bri = bri; S.quick.pads = pads;
+  Object.assign(S.quick, S.quickCache);
   renderQuick();
   const st = await gamo.state().catch(() => null);
   if (st && S.quickOpen) { S.state.hostInfo = st.hostInfo; renderQuick(); }
+}
+
+// hangerő / fényerő / hálózat előtöltése (indításkor és a menü nyitásakor)
+async function prefetchQuick() {
+  const [vol, net, bri, pads] = await Promise.all([gamo.volume('VOLGET').catch(() => null), gamo.network().catch(() => null), briAllowed() ? gamo.brightness().catch(() => null) : null, gamo.padBattery().catch(() => [])]);
+  S.quickCache = { vol, net, bri, pads };
+}
+setTimeout(() => prefetchQuick().catch(() => {}), 2500);
+// fényerő csak laptopon, és csak a beépített kijelzőn (külső kijelzőn a monitor saját gombja állítja)
+function briAllowed() {
+  const d = S.state && S.state.display;
+  return !!(d && d.isLaptop && !d.external);
 }
 
 function closeQuick() {
@@ -55,13 +69,15 @@ function renderQuick() {
     h('div', { class: 'q-date' }, now.toLocaleDateString('hu-HU', { weekday: 'long', month: 'long', day: 'numeric' })));
   const q = S.quick;
   const rows = [{ group: 'Gyors beállítások' }];
-  if (q.vol) {
-    rows.push({ type: 'slider', label: 'Hangerő', get: () => q.vol.level, step: 5, fmt: (v) => (q.vol.muted ? 'némítva' : `${v}%`),
-      set: async (v) => { q.vol = await gamo.volume(`VOLSET ${v}`); } });
-    rows.push({ type: 'toggle', label: 'Némítás', get: () => q.vol.muted, set: async (v) => { q.vol = await gamo.volume(`VOLMUTE ${v ? 1 : 0}`); } });
-  }
-  if (q.bri !== null && q.bri !== undefined) {
-    rows.push({ type: 'slider', label: 'Fényerő', get: () => q.bri, step: 10, fmt: (v) => `${v}%`, set: async (v) => { q.bri = await gamo.brightness(v); } });
+  // hangerő + némítás egy sorban: a csúszka jobb oldalán négyzetes némítás gomb (Ⓐ a hangerő soron is némít)
+  const v0 = q.vol || { level: 0, muted: false };
+  const mute = async () => { if (!q.vol) return; q.vol = await gamo.volume(`VOLMUTE ${q.vol.muted ? 0 : 1}`); S.quickCache = { ...S.quickCache, vol: q.vol }; renderQuick(); };
+  rows.push({ type: 'slider', label: 'Hangerő', get: () => v0.level, step: 5, fmt: (v) => (!q.vol ? '…' : v0.muted ? 'néma' : `${v}%`), cls: v0.muted ? 'muted' : '',
+    set: async (v) => { if (!q.vol) return true; q.vol = await gamo.volume(`VOLSET ${v}`); S.quickCache = { ...S.quickCache, vol: q.vol }; },
+    side: { icon: v0.muted ? 'mute' : 'volume', active: v0.muted, title: v0.muted ? 'Némítás feloldása' : 'Némítás', run: mute } });
+  if (briAllowed()) {
+    rows.push({ type: 'slider', label: 'Fényerő', get: () => q.bri ?? 0, step: 10, fmt: (v) => (q.bri === null || q.bri === undefined ? '…' : `${v}%`),
+      set: async (v) => { if (q.bri === null || q.bri === undefined) return true; q.bri = await gamo.brightness(v); S.quickCache = { ...S.quickCache, bri: q.bri }; } });
   }
   rows.push({ type: 'toggle', label: 'Éjszakai mód', desc: 'Melegebb, kíméletesebb színek a InariX felületén', get: () => !!S.state.settings.ui.nightMode, set: (v) => ({ ui: { nightMode: v } }), after: () => applyNight() });
   rows.push({ type: 'select', label: 'Alvásidőzítő', options: [[0, 'Ki'], [15, '15 perc'], [30, '30 perc'], [60, '1 óra'], [90, '1,5 óra']], get: () => S.sleepMin || 0,

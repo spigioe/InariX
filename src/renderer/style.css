@@ -735,3 +735,11 @@ body.wizard-open #osk { z-index: 320; }
 .web-shop-tile { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: .5em; text-align: center; background: var(--grad) !important; color: #fff; padding: 1em; }
 .web-shop-tile .ui-ico { width: 2.6em; height: 2.6em; }
 .web-shop-tile small { opacity: .85; }
+/* gyorsmenü: csúszka + négyzetes gomb egy sor helyén (hangerő + némítás) */
+.row-pair { display: flex; gap: .45em; align-items: flex-start; }
+.row-pair > .row-item { flex: 1; min-width: 0; }
+.row-side { flex: none; width: 3.5em; align-self: flex-start; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: calc(.8em * var(--rs)); background: var(--panel); border: 1px solid var(--line); color: var(--text); padding: 0; }
+.row-side .ui-ico { width: 1.3em; height: 1.3em; }
+.row-side.on { background: color-mix(in srgb, #ef4444 30%, var(--panel)); color: #fecaca; }
+.row-side.focused { box-shadow: var(--focus); }
+.row-item.muted .fill { opacity: .35; }

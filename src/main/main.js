@@ -1071,6 +1071,7 @@ app.whenReady().then(async () => {
   // játékon belüli overlay (Guide gomb) + teljesítmény kijelző
   if (!process.env.INARIX_NO_INTEGRATION) {
     overlay = setupOverlay({
+      isStreaming: () => !!(streamHost && streamHost.active),
       getWin: () => win, showConsole: () => showConsole(), log, getCfg: () => cfg.get(), updateCfg: (p) => cfg.update(p),
       volume: (cmd) => display.volume(cmd),
       runningLocal: async () => runningGames(await library.localGames(false)),

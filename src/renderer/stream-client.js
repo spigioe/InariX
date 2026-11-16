@@ -8,6 +8,7 @@
 const StreamClient = (() => {
   let pc = null, fast = null, rel = null, vch = null, ui = null, hostId = null, onEnd = null;
   let decoder = null, ctx = null, canvas = null, vconf = null, needKey = true;
+  const guideDown = new Set(), chordPads = new Set();
   let padTimer = null, statsTimer = null, hintTimer = null, discTimer = null, comboSince = 0, menuSince = 0, fbTimer = null, barTimer = null;
   let menuOpen = false, rate = { fps: 60, kbps: 0 }, lastArrival = 0, late = 0, waitRelease = false, game = null;
   // Egér mód: a kontroller a gép egerét/billentyűzetét vezérli (asztal streamnél alapból bekapcsolva)
@@ -222,8 +223,15 @@ const StreamClient = (() => {
           if ((b & menuCombo) === menuCombo) { if (!menuSince) menuSince = nowM; else if (nowM - menuSince > 1000) { menuSince = 0; openMenu(); return; } } else menuSince = 0;
           continue;
         }
+        // Guide (Xbox / PS gomb): a kliens stream menüjét (overlay) nyitja, a hosthoz nem küldjük
+        // (különben a host virtuális kontrollere nyitná a host overlayét, amivel a kliensről nem lehet interaktálni)
+        if (b & XB.GUIDE) { if (!guideDown.has(i)) { guideDown.add(i); openMenu(); return; } } else guideDown.delete(i);
+        // Select+Start kombináció: amíg mindkettő (vagy a kombó része) le van nyomva, a host nem kapja meg
+        // (a hoston a Windows / launcherek ablakváltót nyitnának rá)
+        if ((b & XB.BACK) && (b & XB.START)) chordPads.add(i); else if (!(b & (XB.BACK | XB.START))) chordPads.delete(i);
+        const fwd = b & ~XB.GUIDE & ~(chordPads.has(i) ? (XB.BACK | XB.START) : 0);
         const ax = (n) => Math.round(Math.max(-1, Math.min(1, p.axes[n] || 0)) * 32767);
-        const s = { t: 'p', i, b, lt: Math.round(((p.buttons[6] && p.buttons[6].value) || 0) * 255), rt: Math.round(((p.buttons[7] && p.buttons[7].value) || 0) * 255), lx: ax(0), ly: -ax(1), rx: ax(2), ry: -ax(3) };
+        const s = { t: 'p', i, b: fwd, lt: Math.round(((p.buttons[6] && p.buttons[6].value) || 0) * 255), rt: Math.round(((p.buttons[7] && p.buttons[7].value) || 0) * 255), lx: ax(0), ly: -ax(1), rx: ax(2), ry: -ax(3) };
         const key = JSON.stringify(s);
         const prev = pads.get(i);
         const now = performance.now();
