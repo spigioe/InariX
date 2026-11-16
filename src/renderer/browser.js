@@ -202,13 +202,13 @@ const Browser = (() => {
     if (!u) return;
     const secure = /^https:/.test(B.url);
     u.replaceChildren(
-      h('span', { class: `br-lock${B.showPage && !secure ? ' insecure' : ''}` }, B.showPage ? (secure ? '🔒' : '⚠') : '⌕'),
+      h('span', { class: `br-lock${B.showPage && !secure ? ' insecure' : ''}` }, uiIcon(B.showPage ? (secure ? 'lock' : 'alert') : 'search')),
       B.showPage ? h('span', { class: 'val' }, B.title || B.url, h('small', {}, `  ${hostOf(B.url)}`)) : h('span', { class: 'ph' }, 'Keresés vagy webcím'));
     el('br-back').disabled = !B.canBack || !B.showPage;
     el('br-fwd').disabled = !B.canFwd || !B.showPage;
-    el('br-reload').textContent = B.loading ? '✕' : '⟳';
+    el('br-reload').replaceChildren(uiIcon(B.loading ? 'close' : 'restart'));
     el('br-reload').title = B.loading ? 'Leállítás' : 'Újratöltés';
-    el('br-star').textContent = isBookmarked() ? '★' : '☆';
+    el('br-star').replaceChildren(uiIcon(isBookmarked() ? 'starFill' : 'star'));
     el('br-star').classList.toggle('on', isBookmarked());
     el('br-star').disabled = !B.showPage;
     el('br-page').disabled = !B.showPage;
@@ -235,7 +235,7 @@ const Browser = (() => {
     const box = el('br-start');
     const sections = [
       h('button', { class: 'focusable search-box br-search', id: 'br-search', dataset: { default: '1' }, onclick: promptAddress },
-        h('span', { class: 'ico' }, '⌕'), h('span', { class: 'ph' }, `Keresés (${eng}) vagy webcím`)),
+        h('span', { class: 'ico' }, uiIcon('search')), h('span', { class: 'ph' }, `Keresés (${eng}) vagy webcím`)),
       h('div', { class: 'section-title small' }, 'Gyorslinkek'),
       h('div', { class: 'br-links' }, QUICK.map(([t, u, col]) => linkCard(t, u, col))),
     ];
@@ -452,7 +452,7 @@ const Browser = (() => {
     items.push({ label: 'Böngésző beállítások', value: 'settings' });
     items.push({ label: 'Bezárás', value: null });
     const v = await modal({ title: B.showPage ? (B.title || 'Böngésző') : 'Böngésző', body: B.showPage ? B.url : '', items });
-    if (v === 'cancel-login') { cancelLogin(); closePage(); setTab('settings', { silent: true }); return; }
+    if (v === 'cancel-login') { cancelLogin(); closePage(); loginFinished(); return; }
     if (v === 'star') toggleBookmark();
     else if (v === 'zin') zoomStep(1);
     else if (v === 'zout') zoomStep(-1);

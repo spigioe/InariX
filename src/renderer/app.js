@@ -57,7 +57,7 @@ function modal({ title, body = '', items = [], wide = false, log = false, node =
       body ? h('div', { class: `body${log ? ' log' : ''}` }, body) : null,
       node,
       h('div', { class: 'actions' }, items.map((it, i) =>
-        h('button', { class: `menu-item focusable ${it.kind || ''}`, dataset: i === 0 && !noDefault ? { default: '1' } : {}, onclick: () => close(it.value) }, it.label))));
+        h('button', { class: `menu-item focusable ${it.kind || ''}`, dataset: i === 0 && !noDefault ? { default: '1' } : {}, onclick: () => close(it.value) }, it.icon ? uiIcon(it.icon, 'mi-ico') : null, it.label))));
     layer.innerHTML = '';
     layer.append(box);
     layer.classList.remove('hidden');
@@ -86,6 +86,7 @@ function applyState(st) {
   S.state = st;
   const ui = st.settings.ui;
   Sound.setEnabled(ui.sounds);
+  KbLayout.set(ui.kbLayout);
   if (typeof applyTheme === 'function' && !S.themePreview) applyTheme(activeTheme());
   document.body.classList.toggle('reduce-motion', !!ui.reduceMotion);
   document.body.classList.toggle('night', !!ui.nightMode);
@@ -106,6 +107,8 @@ function renderHostChip() {
 
 // ---------------- Fülek ----------------
 function setTab(tab, { silent = false } = {}) {
+  // a varázslóból indított belépés közben a böngésző elhagyása = megszakítás, vissza a varázslóba
+  if (S.loginReturn && tab !== 'browser') { if (S.loginStore) cancelLogin(); loginFinished(); return; }
   if (S.tab === 'browser' && tab !== 'browser' && typeof Browser !== 'undefined') Browser.onTabLeave();
   S.tab = tab;
   document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
@@ -218,23 +221,75 @@ const LIB_FILTERS = {
   custom: { label: 'Egyedi', fn: (g) => g.store === 'custom' },
 };
 
-function coverEl(item, cls = 'tile', portrait = false) {
-  // fekvő csempe témánál a széles (header) kép az elsődleges
-  if (!portrait && document.body.dataset.tiles === 'landscape' && item.coverFallback) item = { ...item, cover: item.coverFallback, coverFallback: item.cover };
+// Csempekép a csempe AKTUÁLIS alakjához (álló / négyzetes / fekvő – a kijelölt kezdőképernyős csempe szélesebb is lesz):
+// a jelöltek közül a képarányban legközelebbit választja; ha egyik sem illik, a teljes képet mutatja elmosott háttéren
+// (vágás helyett). Steam játékoknál: álló borító, széles kapszula, fejléc és a „hero” kép + logó (négyzetes / fekvő csempékhez).
+const ART_RATIO = new Map(); // kép URL → mért képarány (nem Steam képeknél)
+const ART_BAD = new Set(); // nem betölthető kép URL-ek
+let artObserver = null;
+function artCandidates(item) {
+  const c = [];
+  const sid = item.store === 'steam' && /^\d+$/.test(String(item.storeId || '')) ? item.storeId : null;
+  if (sid) {
+    const b = `https://cdn.cloudflare.steamstatic.com/steam/apps/${sid}`;
+    c.push({ src: `${b}/library_600x900.jpg`, r: 2 / 3 });
+    c.push({ src: `${b}/capsule_616x353.jpg`, r: 616 / 353 });
+    c.push({ src: `${b}/header.jpg`, r: 460 / 215 });
+    c.push({ src: `${b}/library_hero.jpg`, logo: `${b}/logo.png`, hero: true });
+  }
+  for (const src of [item.cover, item.coverFallback]) if (src && !c.some((x) => x.src === src)) c.push({ src, r: ART_RATIO.get(src) || null });
+  return c.filter((x) => !ART_BAD.has(x.src) && !(x.logo && ART_BAD.has(x.logo)));
+}
+function artScore(x, tr) {
+  // a hero kép (+ logó) középre vágva a négyzetes és enyhén fekvő csempéken mutat jól
+  if (x.hero) return tr >= 0.85 && tr <= 1.45 ? 0.1 : 9;
+  if (!x.r) return 0.5; // még ismeretlen arány: közepes jelölt, a betöltés után pontosítunk
+  return Math.abs(Math.log(x.r / tr));
+}
+function applyArt(tile) {
+  const st = tile._art;
+  if (!st || !tile.isConnected) return;
+  const w = tile.clientWidth, hgt = tile.clientHeight;
+  if (!w || !hgt) return;
+  const tr = w / hgt;
+  const list = artCandidates(st.item);
+  if (!list.length) { st.fallback(); return; }
+  let best = list[0], bs = Infinity;
+  for (const x of list) { const sc = artScore(x, tr); if (sc < bs) { bs = sc; best = x; } }
+  const fit = bs > 0.22; // ~25%-nál nagyobb eltérés: nem vágjuk, hanem elmosott háttéren egészben mutatjuk
+  tile.classList.toggle('fit', fit);
+  if (st.cur === best.src) return;
+  st.cur = best.src;
+  const pre = new Image();
+  pre.onload = () => {
+    if (st.cur !== best.src) return;
+    if (!best.r && !best.hero) { best.r = pre.naturalWidth / pre.naturalHeight; ART_RATIO.set(best.src, best.r); st.cur = null; }
+    st.img.src = best.src; st.bg.src = best.src;
+    tile.classList.toggle('hero', !!best.hero);
+    if (best.hero) st.logo.src = best.logo;
+    if (!st.cur) applyArt(tile); // a mért arány alapján újraválaszt
+  };
+  pre.onerror = () => { ART_BAD.add(best.src); if (st.cur === best.src) { st.cur = null; applyArt(tile); } };
+  pre.src = best.src;
+}
+function coverEl(item, cls = 'tile') {
   const tile = h('div', { class: cls });
   const fallback = () => {
-    tile.querySelector('img')?.remove();
+    tile.querySelectorAll('img').forEach((i) => i.remove());
+    tile._art = null;
+    if (tile.querySelector('.ph')) return;
     const ini = (item.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
     tile.prepend(h('div', { class: 'ph' }, h('div', { class: 'ini' }, ini), item.name));
   };
-  if (item.cover) {
-    const img = h('img', { src: item.cover, alt: '', loading: 'lazy', draggable: 'false' });
-    let triedFallback = false;
-    img.addEventListener('error', () => {
-      if (!triedFallback && item.coverFallback) { triedFallback = true; img.src = item.coverFallback; } else fallback();
-    });
-    tile.append(img);
-  } else fallback();
+  if (!artCandidates(item).length) { fallback(); return tile; }
+  const bg = h('img', { class: 'art-bg', alt: '', draggable: 'false' });
+  const img = h('img', { class: 'art', alt: '', draggable: 'false' });
+  const logo = h('img', { class: 'art-logo', alt: '', draggable: 'false' });
+  logo.addEventListener('error', () => { ART_BAD.add(logo.src); tile._art && (tile._art.cur = null); applyArt(tile); });
+  tile.append(bg, img, logo);
+  tile._art = { item, bg, img, logo, cur: null, fallback };
+  if (!artObserver) artObserver = new ResizeObserver((ents) => { for (const e of ents) applyArt(e.target); });
+  artObserver.observe(tile);
   return tile;
 }
 
@@ -250,7 +305,7 @@ function gameTile(e) {
   t.dataset.scroll = 'center';
   t.dataset.key = e.key;
   t.append(statusBadge(e));
-  if (e.fav) t.append(h('div', { class: 'fav' }, '★'));
+  if (e.fav) t.append(h('div', { class: 'fav' }, uiIcon('starFill')));
   if (e.running && e.running.length) { t.classList.add('is-running'); t.append(h('div', { class: 'run-badge' }, '● FUT')); }
   if (e.download) t.append(h('div', { class: 'prog' }, h('div', { style: `width:${e.download.pct}%` })), h('div', { class: 'flag' }, `${e.download.pct}%`));
   if (!e.sources.length) t.classList.add('notinstalled');
@@ -356,7 +411,7 @@ function renderDetail(e) {
   $('#d-cover').replaceChildren(coverEl(e, `tile${e.available ? '' : ' unavailable'}`, true));
   $('#d-title').textContent = e.name;
   const badges = [h('span', { class: `badge ${e.store}` }, STORE_LABEL[e.store] || e.store)];
-  if (e.fav) badges.push(h('span', { class: 'badge' }, '★ Kedvenc'));
+  if (e.fav) badges.push(h('span', { class: 'badge' }, uiIcon('starFill'), ' Kedvenc'));
   if (e.hidden) badges.push(h('span', { class: 'badge' }, 'Rejtett'));
   $('#d-badges').replaceChildren(...badges);
   $('#d-sources').replaceChildren(...e.sources.map((s) => h('span', { class: `src ${s.online ? 'on' : 'off'}` },
@@ -382,13 +437,13 @@ function renderDetail(e) {
       icon('download'), `Telepítés: ${x.local ? 'ezen a gépen' : x.name}`)));
   }
   if (e.download) acts.push(h('div', { class: 'dl-note' }, icon('download'), `Letöltés (${e.download.hostName}): ${e.download.pct}% · ${(e.download.done / 1073741824).toFixed(1)} / ${(e.download.total / 1073741824).toFixed(1)} GB`));
-  acts.push(h('button', { class: 'pill focusable', onclick: () => toggleFav(e) }, e.fav ? '★ Kedvenc' : '☆ Kedvencekhez'));
-  acts.push(h('button', { class: 'pill focusable', onclick: () => addToCollection(e) }, '▤ Gyűjtemény'));
+  acts.push(h('button', { class: 'pill focusable', onclick: () => toggleFav(e) }, uiIcon(e.fav ? 'starFill' : 'star'), e.fav ? 'Kedvenc' : 'Kedvencekhez'));
+  acts.push(h('button', { class: 'pill focusable', onclick: () => addToCollection(e) }, uiIcon('layers'), 'Gyűjtemény'));
   if (e.sources.length > 1) {
     acts.push(h('button', { class: 'pill focusable', onclick: () => choosePrefer(e) }, `Alapértelmezett: ${e.prefer ? (e.sources.find((s) => s.hostId === e.prefer) || {}).hostName || 'auto' : 'automatikus'}`));
   }
   for (const s of online.filter((x) => !x.local)) acts.push(h('button', { class: 'pill focusable', onclick: () => streamDesktop(hostById(s.hostId)) }, `Asztal: ${s.hostName}`));
-  acts.push(h('button', { class: 'pill focusable', onclick: () => moreActions(e) }, '… Továbbiak'));
+  acts.push(h('button', { class: 'pill focusable', onclick: () => moreActions(e) }, uiIcon('more'), 'Továbbiak'));
 
   const note = !e.available && e.sources.length ? h('div', { class: 'offline-note' }, icon('cloudOff'),
     h('div', {}, h('b', {}, 'A távoli gép jelenleg nem elérhető. '),
@@ -427,7 +482,7 @@ function renderDetailInfo(e, d) {
   if (d.achievements) {
     const a = d.achievements;
     info.push(h('div', { class: 'ach' },
-      h('div', { class: 'ach-head' }, h('b', {}, '🏆 Achievementek'), h('span', {}, `${a.done} / ${a.total}  ·  ${Math.round((a.done / a.total) * 100)}%`)),
+      h('div', { class: 'ach-head' }, h('b', {}, uiIcon('trophy', 'h2-ico'), 'Achievementek'), h('span', {}, `${a.done} / ${a.total}  ·  ${Math.round((a.done / a.total) * 100)}%`)),
       h('div', { class: 'bar' }, h('div', { class: 'fill', style: `width:${(a.done / a.total) * 100}%` })),
       h('div', { class: 'ach-list' }, a.recent.map((x) => h('div', { class: 'ach-item', title: x.desc }, x.icon ? h('img', { src: x.icon, alt: '' }) : null, h('span', {}, x.name))))));
   }
@@ -610,8 +665,40 @@ async function wake(host) {
 // ---------------- Áruház ----------------
 function storeHandlers() { return { y: () => { searchStore(); return true; } }; }
 
+// Áruházak: csak azok választhatók, amelyekhez fiók van csatolva (ezen a gépen vagy egy gaming PC-n).
+// Steam és GOG: saját felület (kiemelt sorok, keresés); a többinél a saját nem telepített játékok + a webes áruház a beépített böngészőben.
+const SHOPS = {
+  steam: { native: true },
+  gog: { native: true },
+  epic: { web: 'https://store.epicgames.com/hu/', search: (q) => `https://store.epicgames.com/hu/browse?q=${encodeURIComponent(q)}&sortBy=relevancy&sortDir=DESC&count=40` },
+  msstore: { web: 'https://www.xbox.com/hu-HU/games/browse', search: (q) => `https://www.xbox.com/hu-HU/search/results/games?q=${encodeURIComponent(q)}` },
+  ubisoft: { web: 'https://store.ubisoft.com/ie/home', search: (q) => `https://store.ubisoft.com/ie/search?q=${encodeURIComponent(q)}` },
+};
+function availableShops() {
+  const L = ACCOUNT_STORES.filter((p) => SHOPS[p] && (accState(p).connected || steamApiOnly(p) || remoteAcc(p)));
+  return L.length ? L : ['steam'];
+}
+function currentShop() {
+  const L = availableShops();
+  if (!L.includes(S.store.shop)) S.store.shop = L[0];
+  return S.store.shop;
+}
+async function chooseShop() {
+  const L = availableShops();
+  const linked = ACCOUNT_STORES.some((p) => accState(p).connected || steamApiOnly(p) || remoteAcc(p));
+  const items = L.map((p) => ({ label: `${STORE_LABEL[p]}${SHOPS[p].native ? '' : ' (webes áruház a böngészőben)'}`, value: p, kind: p === S.store.shop ? 'primary' : '' }));
+  items.push({ icon: 'accounts', label: 'További fiók csatlakoztatása…', value: '#acc' }, { label: 'Mégse', value: null });
+  const v = await modal({ title: 'Áruház', body: linked ? 'A csatolt fiókjaid áruházai.' : 'Még nincs csatolt fiók – addig a Steam áruház érhető el.', items });
+  if (!v) return;
+  if (v === '#acc') { S.setCat = 'accounts'; setTab('settings'); return; }
+  S.store.shop = v; S.store.q = '';
+  loadStore('featured');
+}
+
 async function searchStore() {
-  const q = await OSK.prompt({ title: 'Keresés a Steam áruházban', value: S.store.q });
+  const shop = currentShop();
+  const q = await OSK.prompt({ title: `Keresés: ${STORE_LABEL[shop]}`, value: S.store.q });
+  if (q !== null && q.trim() && !SHOPS[shop].native) { Browser.navigate(SHOPS[shop].search(q.trim())); return; }
   if (q === null) return;
   S.store.q = q.trim();
   loadStore(S.store.q ? 'search' : 'featured');
@@ -621,10 +708,16 @@ async function loadStore(mode) {
   S.store.mode = mode; S.store.loading = true; S.store.error = null; S.store.items = []; S.store.loaded = true;
   renderStore();
   try {
-    if (mode === 'search') S.store.items = await gamo.storeSearch(S.store.q);
-    else if (mode === 'owned') S.store.items = await gamo.owned(S.storeTarget);
-    else if (mode === 'wishlist') S.store.items = [...S.state.settings.wishlist];
-    else { S.store.rows = await gamo.storeRows(); S.store.items = S.store.rows.flatMap((r) => r.items); }
+    const shop = currentShop();
+    S.store.rows = null;
+    if (mode === 'search') S.store.items = await gamo.storeSearch(S.store.q, shop);
+    else if (mode === 'owned') S.store.items = (await gamo.owned(S.storeTarget)).filter((it) => it.store === shop);
+    else if (mode === 'wishlist') S.store.items = S.state.settings.wishlist.filter((it) => (it.store || 'steam') === shop);
+    else if (!SHOPS[shop].native) {
+      // webes áruház: a saját, még nem telepített játékok ebből a boltból (a könyvtárból)
+      S.store.items = S.lib.games.filter((g) => g.store === shop && !g.sources.length)
+        .map((g) => ({ store: g.store, storeId: g.storeId, installId: g.installId, name: g.name, cover: g.cover, coverFallback: g.coverFallback, owned: true }));
+    } else { S.store.rows = await gamo.storeRows(shop); S.store.items = S.store.rows.flatMap((r) => r.items); }
   } catch (e) { S.store.error = e.message; }
   S.store.loading = false;
   if (S.tab === 'store') { renderStore(); requestAnimationFrame(() => { const f = $('#store-grid .focusable'); if (f && mode !== 'featured') Nav.focus(f, { silent: true }); }); }
@@ -642,17 +735,22 @@ async function chooseStoreTarget() {
 function renderStore() {
   const target = hostById(S.storeTarget) || hostById('local');
   $('#store-host').textContent = target.name;
+  const shop = currentShop();
+  $('#store-shop-name').textContent = STORE_LABEL[shop];
+  $('#store-shop-ic').replaceChildren(uiIcon('store'));
+  $('#store-search-ic').replaceChildren(uiIcon('search'));
+  $('#store-shop').onclick = chooseShop;
   const qEl = $('#store-q');
-  qEl.textContent = S.store.q || 'Keresés a Steam áruházban…';
+  qEl.textContent = S.store.q || `Keresés: ${STORE_LABEL[shop]}${SHOPS[shop].native ? '' : ' (böngészőben)'}…`;
   qEl.className = S.store.q ? 'val' : 'ph';
   $('#store-search').onclick = searchStore;
   $('#store-owned').onclick = () => loadStore('owned');
   $('#store-home').onclick = () => { S.store.q = ''; loadStore('featured'); };
   $('#store-wish').onclick = () => loadStore('wishlist');
-  $('#store-wish').textContent = `♡ Kívánságlista (${S.state.settings.wishlist.length})`;
+  $('#store-wish').replaceChildren(uiIcon('heart'), ` Kívánságlista (${S.state.settings.wishlist.length})`);
   $('#store-target').onclick = chooseStoreTarget;
   if (!S.store.loaded) { loadStore('featured'); return; }
-  $('#store-title').textContent = { featured: '', search: `Találatok: „${S.store.q}”`, owned: `Saját könyvtár – nincs telepítve (${target.name})`, wishlist: 'Kívánságlista' }[S.store.mode];
+  $('#store-title').textContent = { featured: SHOPS[shop].native ? '' : `${STORE_LABEL[shop]} – a saját, nem telepített játékaid`, search: `Találatok: „${S.store.q}”`, owned: `Saját könyvtár – nincs telepítve (${target.name})`, wishlist: 'Kívánságlista' }[S.store.mode];
   const grid = $('#store-grid');
   const rowsEl = $('#store-rows');
   grid.innerHTML = '';
@@ -671,7 +769,12 @@ function renderStore() {
   }
   if (S.store.loading) { grid.append(h('div', { class: 'empty' }, h('span', { class: 'spinner' }))); return; }
   if (S.store.error) { grid.append(h('div', { class: 'empty' }, `Hiba: ${S.store.error}`)); return; }
-  if (!S.store.items.length) {
+  if (S.store.mode === 'featured' && !SHOPS[shop].native) {
+    grid.append(h('button', { class: 'grid-item focusable web-shop', dataset: { default: '1' }, onclick: () => Browser.navigate(SHOPS[shop].web) },
+      h('div', { class: 'tile web-shop-tile' }, uiIcon('browser'), h('b', {}, `${STORE_LABEL[shop]} áruház`), h('small', {}, 'Megnyitás a beépített böngészőben')),
+      h('div', { class: 'cap' }, h('div', {}, 'Böngészés és vásárlás'), h('div', { class: 'p' }, 'webes áruház'))));
+  }
+  if (!S.store.items.length && !(S.store.mode === 'featured' && !SHOPS[shop].native)) {
     grid.append(h('div', { class: 'empty' }, S.store.mode === 'owned'
       ? 'Nincs megjeleníthető saját játék. A Steam könyvtárhoz add meg a Steam Web API kulcsot a cél gépen (Beállítások → Host mód), Epichez telepítsd a legendary CLI-t.'
       : 'Nincs találat.'));
@@ -683,7 +786,7 @@ function renderStore() {
     const tile = coverEl(it, 'tile');
     if (have) tile.append(h('div', { class: 'flag' }, 'Telepítve'));
     if (it.discount) tile.append(h('div', { class: 'disc' }, `-${it.discount}%`));
-    grid.append(h('div', { class: 'grid-item focusable', onclick: () => (it.store === 'steam' ? openStoreDetail(it) : storeItem(it)) }, tile,
+    grid.append(h('div', { class: 'grid-item focusable', onclick: () => (it.store === 'steam' && !it.owned ? openStoreDetail(it) : storeItem(it)) }, tile,
       h('div', { class: 'cap' }, h('div', {}, it.name), h('div', { class: 'p' }, it.owned ? `${STORE_LABEL[it.store]} · saját` : it.price || ''))));
   }
 }
@@ -691,12 +794,12 @@ function renderStore() {
 function storeTile(it) {
   const t = coverEl(it, 'tile focusable');
   t.dataset.scroll = 'center';
-  const have = S.lib.games.find((g) => g.key === `steam:${it.storeId}` && g.sources.length);
+  const have = S.lib.games.find((g) => g.key === `${it.store}:${it.storeId}` && g.sources.length);
   if (have) t.append(h('div', { class: 'flag' }, 'Telepítve'));
   if (it.discount) t.append(h('div', { class: 'disc' }, `-${it.discount}%`));
   t.append(h('div', { class: 'ttl' }, it.name, it.price ? h('div', { class: 'tp' }, it.price) : null));
   t.addEventListener('navfocus', () => scrollRowIntoView(t, $('#store-rows')));
-  t.addEventListener('click', () => openStoreDetail(it));
+  t.addEventListener('click', () => (it.store === 'steam' ? openStoreDetail(it) : storeItem(it)));
   return t;
 }
 
@@ -708,17 +811,24 @@ async function storeItem(it) {
     if (v === 'detail') { setTab('library'); openDetail(have); return; }
     if (v !== 'install') return;
   } else {
+    // megvásárolt (saját) játék: telepítés; áruházi (még nem saját) GOG játék: adatlap a böngészőben vagy a GOG Galaxyban
+    const buy = !it.owned && it.store !== 'steam';
+    const items = buy
+      ? [{ icon: 'browser', label: 'Adatlap és vásárlás (böngésző)', value: 'web', kind: 'primary' }, { icon: 'download', label: `Megnyitás a GOG Galaxyban: ${target.name}`, value: 'install' }]
+      : [{ icon: 'download', label: 'Telepítés', value: 'install', kind: 'primary' }];
+    items.push({ icon: 'hosts', label: 'Másik gépre…', value: 'target' }, { label: 'Mégse', value: null });
     const v = await modal({
       title: it.name,
-      body: `${STORE_LABEL[it.store]}${it.price ? ` · ${it.price}` : ''}\nTelepítés ide: ${target.name}\n\nHa még nincs meg a játék, a Steam a vásárlási oldalt nyitja meg.`,
-      items: [{ label: 'Telepítés', value: 'install', kind: 'primary' }, { label: 'Másik gépre…', value: 'target' }, { label: 'Mégse', value: null }],
+      body: `${STORE_LABEL[it.store]}${it.price ? ` · ${it.price}` : ''}${it.owned ? ' · saját' : ''}\nCél gép: ${target.name}${it.store === 'steam' && !it.owned ? '\n\nHa még nincs meg a játék, a Steam a vásárlási oldalt nyitja meg.' : ''}`,
+      items,
     });
+    if (v === 'web') { Browser.navigate(it.url || `https://www.gog.com/game/${it.storeId}`); return; }
     if (v === 'target') { await chooseStoreTarget(); return storeItem(it); }
     if (v !== 'install') return;
   }
   try {
     const r = await gamo.install(target.id, { store: it.store, storeId: it.storeId, name: it.name });
-    toast(r.message || 'Telepítés elindítva', 'ok', 6000);
+    toast(r.message || 'A telepítő megnyílt', 'ok', 6000);
     if (r.needsConfirm && !target.local) {
       if (await confirmBox('Megerősítés szükséges', 'A telepítő ablak megnyílt a gaming PC-n. Megnyissam az asztal streamet, hogy megerősítsd?', 'Asztal streamelése')) streamDesktop(target);
     } else if (r.needsConfirm && target.local) gamo.hide();
@@ -930,7 +1040,7 @@ async function initBattery() {
   const upd = () => {
     const el = $('#battery');
     if (b.charging && b.level === 1 && b.chargingTime === 0) { el.textContent = ''; return; }
-    el.textContent = `${b.charging ? '⚡' : '🔋'} ${Math.round(b.level * 100)}%`;
+    el.replaceChildren(uiIcon(b.charging ? 'bolt' : 'battery'), ` ${Math.round(b.level * 100)}%`);
     el.classList.add('on');
     if (!b.charging && b.level <= 0.15 && !S.lowBatWarned) { S.lowBatWarned = true; toast(`Alacsony akkumulátor: ${Math.round(b.level * 100)}%`, 'err', 8000); }
     if (b.charging) S.lowBatWarned = false;

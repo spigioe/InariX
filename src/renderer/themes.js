@@ -27,7 +27,7 @@ const BG_MODES = [['art', 'Játék háttérkép'], ['gradient', 'Mozgó színát
 const THEME_PRESETS = [
   // A két nagy konzol alapértelmezett felületének hangulata (színek, formák) – logók és védett elemek nélkül
   { id: 'xbox', name: 'Xbox stílus', a1: '#107c10', a2: '#5dc21e', bg: '#101010', panel: '#2a2a2a', bgMode: 'art', bgDim: 40, radius: 3, font: 'segoe', tiles: 'square', glow: false },
-  { id: 'ps5', name: 'PS5 stílus', a1: '#0070d1', a2: '#4fa3ff', bg: '#00091a', panel: '#0b1a33', bgMode: 'art', bgDim: 15, radius: 12, font: 'segoe', tiles: 'square', glow: true },
+  { id: 'ps5', name: 'PS5 stílus', a1: '#0070d1', a2: '#4fa3ff', bg: '#00091a', panel: '#0b1a33', bgMode: 'art', bgDim: 15, radius: 12, font: 'segoe', tiles: 'square', grow: 'big', glow: true },
   { id: 'aurora', name: 'Aurora', a1: '#7c3aed', a2: '#22d3ee', bg: '#05060a', panel: '#12141e', bgMode: 'art', bgDim: 10, radius: 14, font: 'segoe', tiles: 'portrait', glow: false },
   { id: 'ocean', name: 'Óceán', a1: '#1d4ed8', a2: '#22d3ee', bg: '#0b1020', panel: '#0f1c2e', bgMode: 'art', bgDim: 15, radius: 14, font: 'segoe', tiles: 'portrait', glow: false },
   { id: 'emerald', name: 'Smaragd', a1: '#10b981', a2: '#84cc16', bg: '#07120c', panel: '#0f1a12', bgMode: 'art', bgDim: 15, radius: 14, font: 'segoe', tiles: 'portrait', glow: false },
@@ -41,7 +41,7 @@ const THEME_PRESETS = [
   { id: 'forest', name: 'Erdő', a1: '#22c55e', a2: '#facc15', bg: '#07120c', panel: '#0f1a12', bgMode: 'art', bgDim: 30, radius: 12, font: 'georgia', tiles: 'portrait', glow: false },
   { id: 'arctic', name: 'Sarkvidék', a1: '#14b8a6', a2: '#e4e4e7', bg: '#0b1020', panel: '#1b1e2b', bgMode: 'gradient', bgDim: 0, radius: 20, font: 'verdana', tiles: 'portrait', glow: false },
 ];
-const THEME_KEYS = ['name', 'a1', 'a2', 'bg', 'panel', 'bgMode', 'bgImage', 'bgDim', 'radius', 'font', 'tiles', 'glow'];
+const THEME_KEYS = ['name', 'a1', 'a2', 'bg', 'panel', 'bgMode', 'bgImage', 'bgDim', 'radius', 'font', 'tiles', 'grow', 'glow'];
 
 const themeList = () => [...THEME_PRESETS, ...((S.state && S.state.settings.themes) || [])];
 function activeTheme() {
@@ -78,6 +78,7 @@ function applyTheme(t) {
   const b = document.body;
   b.dataset.bgmode = t.bgMode || 'art';
   b.dataset.tiles = t.tiles || 'portrait';
+  b.dataset.grow = t.grow || 'wide';
   b.classList.toggle('glow', !!t.glow);
   const custom = $('#bg-custom');
   if (custom) custom.style.backgroundImage = t.bgMode === 'image' && t.bgImage ? `url("${toImageUrl(t.bgImage)}")` : '';
@@ -158,6 +159,7 @@ async function openThemeEditor(base) {
     { group: 'Forma és betű' },
     { type: 'select', label: 'Lekerekítés', options: [[0, 'Szögletes'], [4, 'Enyhe'], [8, 'Kicsi'], [14, 'Közepes'], [20, 'Nagy'], [28, 'Extra']], get: () => draft.radius, set: (v) => set('radius')(Number(v)) },
     { type: 'select', label: 'Betűtípus', options: Object.entries(FONTS).map(([k, [n]]) => [k, n]), get: () => draft.font, set: set('font') },
+    { type: 'select', label: 'Kijelölt csempe (kezdőképernyő)', options: [['wide', 'Oldalirányba nyúlik meg'], ['big', 'Az egész nagyobb lesz']], get: () => draft.grow || 'wide', set: set('grow') },
     { type: 'select', label: 'Játék csempék', options: [['portrait', 'Álló borító (2:3)'], ['square', 'Négyzetes (1:1)'], ['landscape', 'Fekvő borító (16:9)']], get: () => draft.tiles, set: set('tiles') },
   ];
   const rerender = () => {

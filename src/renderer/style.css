@@ -85,6 +85,15 @@ body.booting #app { opacity: 0; }
 .shelf::-webkit-scrollbar { display: none; }
 .tile { flex: 0 0 auto; width: clamp(120px, 9.2vw, 210px); aspect-ratio: 2 / 3; border-radius: .9em; overflow: hidden; position: relative; background: var(--panel-solid); transition: transform .18s ease, box-shadow .18s ease; outline: none; }
 .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* csempekép: a csempe alakjához választott kép; ha nem illik, egészben, elmosott háttéren (lásd coverEl) */
+.tile img.art { position: relative; }
+.tile img.art:not([src]), .tile img.art-bg:not([src]) { visibility: hidden; }
+.tile img.art-bg { position: absolute; inset: -12%; width: 124%; height: 124%; filter: blur(18px) brightness(.55) saturate(1.25); display: none; }
+.tile.fit:not(.hero) img.art-bg { display: block; }
+.tile.fit:not(.hero) img.art { object-fit: contain; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, .55)); }
+.tile img.art-logo { position: absolute; inset: 0; margin: auto; width: 78%; height: 46%; object-fit: contain; display: none; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, .75)); }
+.tile.hero img.art-logo[src] { display: block; }
+.tile.hero img.art { object-position: 50% 30%; }
 .tile .ph { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: .9em; font-weight: 700; background: var(--grad); }
 .tile .ph .ini { position: absolute; top: .4em; left: .5em; font-size: 2.6em; opacity: .35; font-weight: 900; }
 .tile .ph.landscape-fit { background-size: cover; background-position: center; }
@@ -418,7 +427,7 @@ body.stream-menu #modal-layer { z-index: 300; }
 .tp-tiles { display: flex; gap: 6px; align-items: flex-start; }
 .tp-tile { width: 28%; }
 .tp-aa { position: absolute; right: 10px; bottom: 6px; font-size: 1.4em; font-weight: 800; }
-.theme-editor { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 1.4em; height: 56vh; margin-bottom: 1em; overflow: hidden; }
+.theme-editor { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 1.4em; height: 56vh; margin-bottom: 1em; overflow: visible; } /* a görgetést a .te-rows végzi; itt a vágás a fókuszkeret szélét tüntetné el */
 .te-prev .tp-prev { height: 200px; }
 .te-rows { overflow-y: auto; min-height: 0; height: 100%; padding: 14px; margin: -14px; scrollbar-width: none; }
 .theme-editor + .actions, .modal:has(.theme-editor) .actions { flex-direction: row; }
@@ -528,11 +537,18 @@ body.home-down #bg-img { opacity: calc((.95 - var(--bg-dim)) * .35); }
 .h-row { padding-top: .2em; }
 .h-row .row-title { margin-top: .5em; }
 .h-shelf { padding-top: 18px; padding-bottom: 22px; align-items: flex-end; }
-/* a kezdőképernyő mindig négyzetes csempéket használ (a téma színei, formái maradnak) */
-#home-rows .tile:not(.wide) { aspect-ratio: 1 / 1; width: clamp(140px, 10.5vw, 230px); }
-/* a kijelölt játékcsempe a nagy (mint a konzolokon) */
-#home-rows .tile:not(.wide) { transition: width .22s ease, transform .18s ease, box-shadow .18s ease; }
-#home-rows .tile.focused:not(.wide):not(.more-tile) { width: clamp(220px, 17vw, 370px); transform: none; }
+/* kezdőképernyő: a téma csempeformája szerint (álló 2:3 / négyzetes / fekvő 16:9); --tw × --tht a csempe alapmérete */
+#home-rows { --tw: clamp(140px, 10.5vw, 230px); --tht: var(--tw); }
+body[data-tiles="portrait"] #home-rows { --tw: clamp(118px, 8.6vw, 190px); --tht: calc(var(--tw) * 1.5); }
+body[data-tiles="landscape"] #home-rows { --tht: clamp(118px, 8.8vw, 195px); --tw: calc(var(--tht) * 16 / 9); }
+#home-rows .tile:not(.wide) { aspect-ratio: auto; width: var(--tw); height: var(--tht); }
+#home-rows .tile:not(.wide) { transition: width .22s ease, height .22s ease, margin .22s ease, transform .18s ease, box-shadow .18s ease; }
+/* téma szerint: 'wide' = oldalirányba nyúlik meg (a magassága marad), 'big' = az egész nagyobb lesz.
+   A sor magassága egyik esetben sem változik, így csempeváltáskor nem ugrál a felület:
+   a 'big' csempe negatív függőleges margóval fölfelé és lefelé a sor (megnövelt) párnázásába nő bele. */
+body:not([data-grow="big"]) #home-rows .tile.focused:not(.wide):not(.more-tile) { width: max(calc(var(--tw) * 1.35), calc(var(--tht) * 1.75)); transform: scale(1.04); }
+body[data-grow="big"] #home-rows .h-shelf { padding-top: calc(var(--tht) * .16 + 10px); padding-bottom: calc(var(--tht) * .16 + 12px); }
+body[data-grow="big"] #home-rows .tile.focused:not(.wide):not(.more-tile) { width: calc(var(--tw) * 1.3); height: calc(var(--tht) * 1.3); margin: calc(var(--tht) * -.15) 0; transform: none; }
 #home-rows .tile.focused { transform: scale(1.05); }
 .more-tile { display: flex; align-items: center; justify-content: center; background: var(--panel); border: 1px solid var(--line); text-align: center; }
 .more-in { display: flex; flex-direction: column; align-items: center; gap: .35em; font-weight: 700; padding: .6em; font-size: .92em; }
@@ -701,3 +717,21 @@ body.wizard-open #osk { z-index: 320; }
 
 /* billentyűzet / egér módban a gombjelzés billentyű sapkaként jelenik meg */
 .hint b.kbd, .osk-hints b.kbd { width: auto; min-width: 1.7em; height: 1.7em; padding: 0 .55em; border-radius: .4em; background: var(--panel-solid); border: 1px solid var(--line); border-bottom-width: 2px; color: var(--text); font-weight: 700; font-size: .78em; font-family: "Segoe UI", sans-serif; }
+
+/* ===== Ikonkészlet (icons.js): egységes vonalas ikonok ===== */
+.ui-ico { display: inline-flex; width: 1.15em; height: 1.15em; flex: none; vertical-align: -.2em; }
+.ui-ico svg { width: 100%; height: 100%; display: block; }
+.q-glyph .ui-ico { width: 1.25em; height: 1.25em; color: #fff; }
+.set-cat .ci .ui-ico, .lib-cat .ci .ui-ico { width: 1.1em; height: 1.1em; }
+.h2-ico { width: 1em; height: 1em; margin-right: .45em; color: var(--a2); vertical-align: -.12em; }
+.wz-ic .ui-ico { width: 1em; height: 1em; color: var(--a2); }
+.menu-item .mi-ico { width: 1.2em; height: 1.2em; margin-right: .7em; opacity: .9; }
+.menu-item:has(.mi-ico) { display: flex; align-items: center; text-align: left; }
+.more-ico .ui-ico { width: 1em; height: 1em; }
+.pill .ui-ico { margin-right: .45em; }
+.badge .ui-ico, .tile .fav .ui-ico { width: 1em; height: 1em; }
+#battery .ui-ico { width: 1.1em; height: 1.1em; }
+.store-shop { display: inline-flex; align-items: center; gap: .45em; }
+.web-shop-tile { display: flex !important; flex-direction: column; align-items: center; justify-content: center; gap: .5em; text-align: center; background: var(--grad) !important; color: #fff; padding: 1em; }
+.web-shop-tile .ui-ico { width: 2.6em; height: 2.6em; }
+.web-shop-tile small { opacity: .85; }

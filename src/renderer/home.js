@@ -109,14 +109,14 @@ function bgTrailer(e) {
 
 function quickTile({ id, label, sub, glyph, color, onclick }) {
   const t = h('button', { class: 'q-tile focusable', dataset: { q: id }, onclick },
-    h('span', { class: 'q-glyph', style: color ? `background:${color}` : '' }, glyph),
+    h('span', { class: 'q-glyph', style: color ? `background:${color}` : '' }, glyphIcon(glyph)),
     h('span', { class: 'q-label' }, label, sub ? h('small', {}, sub) : null));
   t.addEventListener('navfocus', (ev) => { S.focusedKey = null; hideCard(); bgTrailer(null); setHero({ name: label, sub: sub || '' }); homeScroll(t, ev); });
   return t;
 }
 
 function moreTile(label, count, onclick) {
-  const t = h('button', { class: 'tile more-tile focusable', onclick }, h('div', { class: 'more-in' }, h('div', { class: 'more-ico' }, '▦'), h('div', {}, label), count != null ? h('small', {}, `${count} játék`) : null));
+  const t = h('button', { class: 'tile more-tile focusable', onclick }, h('div', { class: 'more-in' }, h('div', { class: 'more-ico' }, uiIcon('grid')), h('div', {}, label), count != null ? h('small', {}, `${count} játék`) : null));
   t.addEventListener('navfocus', (ev) => { S.focusedKey = null; setHero({ name: label, sub: count != null ? `${count} játék` : '' }); homeScroll(t, ev); });
   return t;
 }
@@ -249,6 +249,12 @@ function renderHome() {
   if (!S.libLoaded) { recentEl.replaceChildren(); setHero({ name: 'Játékok betöltése…', sub: 'Gépek és launcherek átvizsgálása' }); return; }
   const all = visibleGames();
   const installed = all.filter((g) => g.sources.length);
+  {
+    // alapállapot, amíg egyik csempe sincs kijelölve (a kijelölés felülírja)
+    const hr = new Date().getHours();
+    const nOnline = S.lib.hosts.filter((x) => !x.local && x.online).length;
+    if (!$('#home-rows .focused')) setHero({ name: hr < 10 && hr >= 4 ? 'Jó reggelt!' : hr < 18 && hr >= 4 ? 'Szia!' : 'Jó estét!', sub: `${installed.length} telepített játék${nOnline ? ` · ${nOnline} gép online` : ''}` });
+  }
   const running = installed.filter((g) => g.running && g.running.length);
   const seen = new Set();
   const take = (list) => list.filter((g) => (seen.has(g.key) ? false : seen.add(g.key)));
@@ -264,13 +270,13 @@ function renderHome() {
 
   const online = S.lib.hosts.filter((x) => !x.local && x.online);
   rows.push(h('div', { class: 'h-row', dataset: { first: '0' } }, h('div', { class: 'shelf h-shelf q-shelf' },
-    quickTile({ id: 'store', label: 'Áruház', sub: 'Keresés és telepítés', glyph: '🛒', color: 'linear-gradient(135deg,#0ea5e9,#6366f1)', onclick: () => setTab('store') }),
-    quickTile({ id: 'browser', label: 'Böngésző', sub: 'Web kontrollerrel', glyph: '🌐', color: 'linear-gradient(135deg,#14b8a6,#0ea5e9)', onclick: () => setTab('browser') }),
-    quickTile({ id: 'desktop', label: 'Asztal', sub: online.length ? `${online[0].name} képernyője, egérrel` : 'Gaming PC asztala', glyph: '🖥', color: 'linear-gradient(135deg,#a855f7,#ec4899)', onclick: chooseDesktopHost }),
-    quickTile({ id: 'hosts', label: 'Gépek', sub: `${online.length} online`, glyph: '⌂', color: 'linear-gradient(135deg,#f59e0b,#ef4444)', onclick: () => setTab('hosts') }),
-    quickTile({ id: 'music', label: 'Zene', sub: S.radio ? `▶ ${S.radio.name}` : 'Rádió és lejátszó vezérlés', glyph: '♫', color: 'linear-gradient(135deg,#f43f5e,#a855f7)', onclick: () => musicMenu() }),
-    quickTile({ id: 'random', label: 'Véletlen játék', sub: 'Dobj egyet', glyph: '🎲', color: 'linear-gradient(135deg,#22c55e,#84cc16)', onclick: () => randomGame() }),
-    quickTile({ id: 'settings', label: 'Beállítások', sub: 'Fiókok, téma, kijelző', glyph: '⚙', color: 'linear-gradient(135deg,#64748b,#334155)', onclick: () => setTab('settings') }))));
+    quickTile({ id: 'store', label: 'Áruház', sub: 'Keresés és telepítés', glyph: 'store', color: 'linear-gradient(135deg,#0ea5e9,#6366f1)', onclick: () => setTab('store') }),
+    quickTile({ id: 'browser', label: 'Böngésző', sub: 'Web kontrollerrel', glyph: 'browser', color: 'linear-gradient(135deg,#14b8a6,#0ea5e9)', onclick: () => setTab('browser') }),
+    quickTile({ id: 'desktop', label: 'Asztal', sub: online.length ? `${online[0].name} képernyője, egérrel` : 'Gaming PC asztala', glyph: 'desktop', color: 'linear-gradient(135deg,#a855f7,#ec4899)', onclick: chooseDesktopHost }),
+    quickTile({ id: 'hosts', label: 'Gépek', sub: `${online.length} online`, glyph: 'hosts', color: 'linear-gradient(135deg,#f59e0b,#ef4444)', onclick: () => setTab('hosts') }),
+    quickTile({ id: 'music', label: 'Zene', sub: S.radio ? `▶ ${S.radio.name}` : 'Rádió és lejátszó vezérlés', glyph: 'music', color: 'linear-gradient(135deg,#f43f5e,#a855f7)', onclick: () => musicMenu() }),
+    quickTile({ id: 'random', label: 'Véletlen játék', sub: 'Dobj egyet', glyph: 'random', color: 'linear-gradient(135deg,#22c55e,#84cc16)', onclick: () => randomGame() }),
+    quickTile({ id: 'settings', label: 'Beállítások', sub: 'Fiókok, téma, kijelző', glyph: 'settings', color: 'linear-gradient(135deg,#64748b,#334155)', onclick: () => setTab('settings') }))));
 
   const order = S.state.settings.ui.pinOrder || [];
   const pos = (g) => { const i = order.indexOf(g.key); return i < 0 ? 1e6 : i; };
@@ -389,7 +395,7 @@ function renderLibrary(focusFirst) {
   navEl.replaceChildren(...cats.map((c) => {
     if (c.group) return h('div', { class: 'lib-group' }, c.group);
     const b = h('button', { class: `set-cat lib-cat focusable${c.id === S.libCat ? ' active' : ''}`, dataset: { cat: c.id } },
-      h('span', { class: 'ci', style: c.dot ? `background:${c.dot}` : '' }, c.dot ? '' : c.glyph || ''),
+      h('span', { class: 'ci', style: c.dot ? `background:${c.dot}` : '' }, c.dot ? '' : glyphIcon(c.glyph)),
       h('span', { class: 'ct' }, c.label, c.sub ? h('small', {}, c.sub) : null),
       h('span', { class: 'cc' }, String(c.count)));
     b.addEventListener('navfocus', () => {

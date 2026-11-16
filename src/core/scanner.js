@@ -51,7 +51,10 @@ async function scanSteam() {
         const flags = parseInt(acf.StateFlags || '4', 10);
         const total = parseInt(acf.BytesToDownload || '0', 10);
         const done = parseInt(acf.BytesDownloaded || '0', 10);
-        const download = flags !== 4 && total > 0 && done < total ? { done, total, pct: Math.round((done / total) * 100) } : null;
+        // Steam StateFlags bitek: 4 = telepítve, 64 = a játék fut, 256 = frissítés fut, 512 = szüneteltetve, 1024 = elindítva.
+        // Csak a ténylegesen futó letöltés/frissítés számít (a sorban álló, szüneteltetett vagy futó játék nem)
+        const active = (flags & 0x500) !== 0 && (flags & 0x200) === 0;
+        const download = active && !(flags & 4) && total > 0 && done < total ? { done, total, pct: Math.round((done / total) * 100) } : null;
         const installDir = path.join(lib, 'common', acf.installdir || '');
         // Több indítási mód esetén a Steam választóablakot dobna fel (és addig minden indítást elnyel):
         // ilyenkor az alapértelmezett módot közvetlenül indítjuk, a Steam azonosítóval (overlay, achievementek maradnak)
@@ -67,7 +70,7 @@ async function scanSteam() {
           installDir,
           lastPlayed: parseInt(acf.LastPlayed || '0', 10) * 1000 || 0,
           sizeBytes: parseInt(acf.SizeOnDisk || '0', 10) || 0,
-          updating: flags !== 4,
+          updating: active && !!(flags & 4),
           launch,
           ...steamArt(acf.appid),
         });

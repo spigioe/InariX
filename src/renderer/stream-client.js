@@ -185,9 +185,10 @@ const StreamClient = (() => {
     on(window, 'keydown', (e) => {
       if (menuOpen) return; // a menüt a konzol navigáció kezeli
       if (e.ctrlKey && e.altKey && e.shiftKey) {
-        if (e.code === 'KeyQ') { e.preventDefault(); stop('kilépés'); return; }
-        if (e.code === 'KeyM') { e.preventDefault(); if (document.pointerLockElement) document.exitPointerLock(); else canvas.requestPointerLock(); return; }
-        if (e.code === 'KeyS') { e.preventDefault(); ui.querySelector('#stream-stats').classList.toggle('hidden'); return; }
+        const ch = KbLayout.letter(e);
+        if (ch === 'q') { e.preventDefault(); stop('kilépés'); return; }
+        if (ch === 'm') { e.preventDefault(); if (document.pointerLockElement) document.exitPointerLock(); else canvas.requestPointerLock(); return; }
+        if (ch === 's') { e.preventDefault(); ui.querySelector('#stream-stats').classList.toggle('hidden'); return; }
       }
       e.preventDefault(); e.stopPropagation();
       sendRel({ t: 'k', c: e.code, d: 1 });

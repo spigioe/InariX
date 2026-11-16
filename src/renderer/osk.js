@@ -1,14 +1,7 @@
 'use strict';
 // Képernyő-billentyűzet kontrollerhez (fizikai billentyűzettel is gépelhető).
 const OSK = (() => {
-  const ROWS = [
-    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'ö', 'ü', 'ó'],
-    ['q', 'w', 'e', 'r', 't', 'z', 'u', 'i', 'o', 'p', 'ő', 'ú'],
-    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'é', 'á', 'ű'],
-    ['⇧', 'í', 'y', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '-', '⌫'],
-    [':', '/', '\\', '_', '@', '"', '(', ')', '!', '?'],
-    ['␣', '✓'],
-  ];
+  // a sorok a beállított / felismert billentyűzetkiosztás szerint (KbLayout)
   let value = '', shift = false, resolver = null, mask = false;
   const el = (id) => document.getElementById(id);
 
@@ -25,6 +18,7 @@ const OSK = (() => {
   function build() {
     const box = el('osk-keys');
     box.innerHTML = '';
+    const ROWS = KbLayout.oskRows();
     for (const row of ROWS) {
       const r = document.createElement('div');
       r.className = 'krow';
@@ -36,7 +30,7 @@ const OSK = (() => {
         else if (k === '✓') { b.classList.add('w2', 'primary'); b.textContent = 'Kész'; }
         else if (k === '⌫' || k === '⇧') { b.classList.add('w2'); b.textContent = k; }
         else b.textContent = k;
-        if (k === 'q') b.dataset.default = '1';
+        if (k === ROWS[1][0]) b.dataset.default = '1';
         b.addEventListener('click', () => press(k));
         r.appendChild(b);
       }

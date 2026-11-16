@@ -174,12 +174,12 @@ async function exitMenu() {
       title: 'Kilépés',
       body: mode === 'running' ? 'A InariX kilépése után a Windows újra kéri a PIN-t (Amíg fut, nem kér mód).' : '',
       items: [
-        { label: '🖥  Vissza a Windows asztalra (a háttérben fut tovább)', value: 'hide', kind: 'primary' },
-        { label: '✕  Kilépés a InariXből', value: 'quit' },
-        { label: '☾  Alvó mód', value: 'sleep' },
-        { label: '⇠  Kijelentkezés a Windowsból', value: 'logoff' },
-        { label: '↻  Újraindítás', value: 'restart' },
-        { label: '⏻  Leállítás', value: 'shutdown', kind: 'danger' },
+        { icon: 'toDesktop', label: 'Vissza a Windows asztalra (a háttérben fut tovább)', value: 'hide', kind: 'primary' },
+        { icon: 'close', label: 'Kilépés az InariX-ből', value: 'quit' },
+        { icon: 'sleep', label: 'Alvó mód', value: 'sleep' },
+        { icon: 'logout', label: 'Kijelentkezés a Windowsból', value: 'logoff' },
+        { icon: 'restart', label: 'Újraindítás', value: 'restart' },
+        { icon: 'power', label: 'Leállítás', value: 'shutdown', kind: 'danger' },
         { label: 'Mégse', value: null },
       ],
     });
@@ -203,13 +203,13 @@ async function hostPowerMenu(host) {
   const local = host.local;
   const items = [];
   if (!local && !lh.online) {
-    if (host.mac) items.push({ label: 'Felébresztés (Wake-on-LAN)', value: 'wake', kind: 'primary' });
+    if (host.mac) items.push({ icon: 'power', label: 'Felébresztés (Wake-on-LAN)', value: 'wake', kind: 'primary' });
   } else {
-    if (!local) items.push({ label: 'Asztal streamelése', value: 'desktop', kind: 'primary' });
-    items.push({ label: 'Alvó mód', value: 'sleep' });
-    items.push({ label: 'Újraindítás', value: 'restart' });
-    items.push({ label: 'Leállítás', value: 'shutdown', kind: 'danger' });
-    if (!local) items.push({ label: 'Rendszer info (lemezterület)', value: 'sys' });
+    if (!local) items.push({ icon: 'desktop', label: 'Asztal streamelése', value: 'desktop', kind: 'primary' });
+    items.push({ icon: 'sleep', label: 'Alvó mód', value: 'sleep' });
+    items.push({ icon: 'restart', label: 'Újraindítás', value: 'restart' });
+    items.push({ icon: 'power', label: 'Leállítás', value: 'shutdown', kind: 'danger' });
+    if (!local) items.push({ icon: 'system', label: 'Rendszer info (lemezterület)', value: 'sys' });
   }
   items.push({ label: 'Mégse', value: null });
   const v = await modal({ title: local ? 'Ez a gép' : host.name, items });
@@ -350,7 +350,7 @@ async function installTo(e, hostId) {
   const host = hostById(hostId);
   try {
     const r = await gamo.install(hostId, { store: e.store, storeId: e.storeId, installId: e.installId || undefined, name: e.name });
-    toast(r.message || 'Telepítés elindítva', 'ok', 6000);
+    toast(r.message || 'A telepítő megnyílt', 'ok', 6000);
     if (r.needsConfirm) {
       if (!host.local) { if (await confirmBox('Megerősítés szükséges', 'A telepítő ablak megnyílt a gaming PC-n. Megnyissam az asztal streamet?', 'Asztal streamelése')) streamDesktop(host); }
       else gamo.hide();

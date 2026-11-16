@@ -26,24 +26,36 @@ async function findLegendary() {
   return r.code === 0 ? r.stdout.split(/\r?\n/)[0].trim() : null;
 }
 
+// Van-e a gépen kezelő az adott URI sémához (pl. goggalaxy:// csak telepített GOG Galaxy mellett)
+async function hasHandler(scheme) {
+  const r = await run('reg', ['query', `HKCR\\${scheme}`]);
+  return r.code === 0;
+}
+const LAUNCHER = { steam: ['steam', 'Steam'], epic: ['com.epicgames.launcher', 'Epic Games Launcher'], gog: ['goggalaxy', 'GOG Galaxy'], ubisoft: ['uplay', 'Ubisoft Connect'], msstore: ['ms-windows-store', 'Microsoft Store'] };
+
 // Telepítés store-ból. item: { store, storeId, name }
+// Az üzenet csak azt állítja, ami tényleg megtörtént: a launcher megnyílt, a telepítést ott kell elindítani / jóváhagyni.
 async function installGame(item) {
   if (!item || !item.store || !item.storeId) throw new Error('Hiányos telepítési adat');
   const id = String(item.storeId).replace(/[^\w.\-:%]/g, '');
+  const L = LAUNCHER[item.store];
+  if (L && !(item.store === 'epic' && await findLegendary()) && !(await hasHandler(L[0]))) {
+    throw new Error(`A(z) ${L[1]} nincs telepítve ezen a gépen, ezért a telepítés nem indítható el. Telepítsd a(z) ${L[1]} alkalmazást, majd próbáld újra.`);
+  }
   switch (item.store) {
     case 'steam':
       openUri(`steam://install/${id}`);
-      return { ok: true, needsConfirm: true, message: 'A Steam telepítési ablaka megnyílt a gépen. Erősítsd meg streamben.' };
+      return { ok: true, needsConfirm: true, message: 'A Steam telepítési ablaka megnyílt – a telepítés a megerősítés után indul.' };
     case 'msstore': {
       const pfn = String(item.installId || item.storeId).replace(/[^\w.\-]/g, '');
       openUri(`ms-windows-store://pdp/?PFN=${pfn}`);
-      return { ok: true, needsConfirm: true, message: 'A Microsoft Store megnyílt a gépen.' };
+      return { ok: true, needsConfirm: true, message: 'A Microsoft Store megnyílt a játék oldalán – a telepítést ott kell elindítani.' };
     }
     case 'epic': {
       if (item.installId && !item.installId.includes('%')) {
         const full = String(item.installId).split(':').map(encodeURIComponent).join('%3A');
         openUri(`com.epicgames.launcher://apps/${full}?action=install`);
-        return { ok: true, needsConfirm: true, message: 'Az Epic Launcher megnyílt a gépen.' };
+        return { ok: true, needsConfirm: true, message: 'Az Epic Games Launcher megnyílt – a telepítést ott kell jóváhagyni.' };
       }
       const leg = await findLegendary();
       if (leg) {
@@ -51,14 +63,14 @@ async function installGame(item) {
         return { ok: true, message: 'Epic játék letöltése elindult (legendary).' };
       }
       openUri(`com.epicgames.launcher://apps/${id}?action=install`);
-      return { ok: true, needsConfirm: true, message: 'Az Epic Launcher megnyílt a gépen.' };
+      return { ok: true, needsConfirm: true, message: 'Az Epic Games Launcher megnyílt – a telepítést ott kell jóváhagyni.' };
     }
     case 'gog':
       openUri(`goggalaxy://openGameView/${id}`);
-      return { ok: true, needsConfirm: true, message: 'GOG Galaxy megnyílt a gépen.' };
+      return { ok: true, needsConfirm: true, message: 'A GOG Galaxy megnyílt a játék oldalán – a telepítést ott kell elindítani.' };
     case 'ubisoft':
       openUri(`uplay://install/${id}`);
-      return { ok: true, needsConfirm: true, message: 'Ubisoft Connect megnyílt a gépen.' };
+      return { ok: true, needsConfirm: true, message: 'A Ubisoft Connect megnyílt – a telepítést ott kell jóváhagyni.' };
     default:
       throw new Error('Nem támogatott store');
   }

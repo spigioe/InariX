@@ -130,9 +130,24 @@ async function syncAccount(p, hostId) {
   loadLibrary(false);
 }
 
+// A bejelentkezési oldal mindig a beépített böngészőben nyílik; a varázslóból indítva a varázsló
+// addig félreáll, és a belépés végén / megszakításakor oda tér vissza (loginFinished)
+function openLoginPage(p, url) {
+  S.loginStore = p;
+  if (S.wizard) S.wizard.suspend();
+  Browser.navigate(url);
+  Browser.setBanner(`${STORE_LABEL[p]} bejelentkezés – lépj be a fiókodba (megszakítás: ≡ menü)`);
+}
+function loginFinished() {
+  if (S.loginReturn) { const f = S.loginReturn; S.loginReturn = null; Browser.closePage(); f(); return; }
+  if (S.wizard) { S.wizard.refresh(); return; }
+  S.setCat = 'accounts';
+  setTab('settings', { silent: true });
+}
+
 async function connectAccount(p) {
   if (p === 'msstore') return deviceLogin(p);
-  const ext = p === 'epic' || p === 'gog';
+  const ext = (p === 'epic' || p === 'gog') && !S.wizard;
   const items = [{ label: 'Bejelentkezés itt, a beépített böngészőben', value: 'inapp', kind: 'primary' }];
   if (ext) items.push({ label: 'Bejelentkezés az asztali böngészőben (kód beillesztésével)', value: 'ext' });
   items.push({ label: 'Mégse', value: null });
@@ -149,9 +164,7 @@ async function connectAccount(p) {
   if (v !== 'inapp') return;
   try {
     const { url } = await gamo.accountConnect(p);
-    S.loginStore = p;
-    Browser.navigate(url);
-    Browser.setBanner(`${STORE_LABEL[p]} bejelentkezés – lépj be a fiókodba (megszakítás: ≡ menü)`);
+    openLoginPage(p, url);
   } catch (e) { toast(e.message, 'err'); }
 }
 
@@ -169,7 +182,7 @@ async function deviceLogin(p) {
   S.deviceModal = true;
   const v = await modal({ title: 'Microsoft fiók csatlakoztatása', node, items: [{ label: 'Megnyitás ezen a gépen', value: 'open' }, { label: 'Mégse', value: null }], noDefault: true });
   S.deviceModal = false;
-  if (v === 'open') { gamo.openExternal(info.url); toast(`Kód: ${info.code} – a bejelentkezés után a InariX magától folytatja`, 'ok', 15000); return; }
+  if (v === 'open') { openLoginPage(p, info.url); toast(`Kód: ${info.code} – írd be a megnyíló oldalon, a bejelentkezés után az InariX magától folytatja`, 'ok', 20000); return; }
   if (S.loginStore === p && !S.deviceDone) cancelLogin();
   S.deviceDone = false;
 }
@@ -196,20 +209,21 @@ function onAccountDone(r) {
   S.loginStore = null;
   Browser.setBanner(null);
   if (S.deviceModal) { S.deviceDone = true; const m = $('#modal-layer .menu-item:last-child'); if (m) m.click(); }
-  if (!r.ok) { toast(`${STORE_LABEL[r.store]}: ${r.error || 'a bejelentkezés nem sikerült'}`, 'err', 8000); return; }
-  toast(`✓ ${STORE_LABEL[r.store]} csatlakoztatva${r.user ? ` (${r.user})` : ''} – játéklista letöltése…`, 'ok', 6000);
+  if (!r.ok) toast(`${STORE_LABEL[r.store]}: ${r.error || 'a bejelentkezés nem sikerült'}`, 'err', 8000);
+  else toast(`✓ ${STORE_LABEL[r.store]} csatlakoztatva${r.user ? ` (${r.user})` : ''} – játéklista letöltése…`, 'ok', 6000);
+  if (!r.ok && !S.loginReturn) { if (S.wizard) S.wizard.refresh(); return; }
   Browser.closePage();
-  S.setCat = 'accounts';
-  setTab('settings', { silent: true });
+  loginFinished();
 }
 
 function initAccountEvents() {
   S.syncing = {};
   gamo.on('account:done', onAccountDone);
-  gamo.on('accounts', (sync) => { if (S.state) { S.state.settings.sync = sync; if (S.tab === 'settings') renderSettings(); } });
+  gamo.on('accounts', (sync) => { if (S.state) { S.state.settings.sync = sync; if (S.tab === 'settings') renderSettings(); if (S.wizard) S.wizard.refresh(); } });
   gamo.on('accounts:syncing', ({ store, on }) => {
     if (on) S.syncing[store] = true; else delete S.syncing[store];
     if (S.tab === 'settings') renderSettings();
+    if (S.wizard) S.wizard.refresh();
   });
   gamo.on('accounts:synced', ({ store, count, error }) => {
     if (error) toast(`${STORE_LABEL[store]} szinkron: ${error}`, 'err', 7000);
@@ -227,7 +241,7 @@ function settingsCategories() {
   const linked = ACCOUNT_STORES.filter((p) => accState(p).connected || steamApiOnly(p) || remoteAcc(p)).length;
   const dispState = `${ds.isLaptop ? 'Laptop' : 'Asztali gép'} · külső kijelző: ${ds.external ? 'igen' : 'nem'}`;
   return [
-    { id: 'accounts', icon: '⛁', title: 'Fiókok és könyvtár', sub: linked ? `${linked} fiók csatlakoztatva` : 'Steam, Epic, GOG, Microsoft Store, Ubisoft', rows: [
+    { id: 'accounts', icon: 'accounts', title: 'Fiókok és könyvtár', sub: linked ? `${linked} fiók csatlakoztatva` : 'Steam, Epic, GOG, Microsoft Store, Ubisoft', rows: [
       { group: 'Játékplatform fiókok' },
       { type: 'note', label: 'A csatlakoztatott fiókok összes játéka megjelenik a könyvtárban – a nem telepítettek is, telepítés gombbal. A könyvtár tetején platform szerint szűrhetsz.' },
       ...ACCOUNT_STORES.map(accountRow),
@@ -242,9 +256,10 @@ function settingsCategories() {
       ...s.collections.map((c) => ({ type: 'action', label: `▤ ${c.name}`, value: () => `${c.keys.length} játék`, run: () => collectionMenu(c) })),
     ] },
 
-    { id: 'look', icon: '◐', title: 'Megjelenés és hang', sub: `Téma: ${currentThemeName()}`, rows: [
+    { id: 'look', icon: 'palette', title: 'Megjelenés és hang', sub: `Téma: ${currentThemeName()}`, rows: [
       { group: 'Téma' },
       { type: 'action', label: 'Témakezelő', desc: 'Beépített (Xbox, PS5…) és saját témák: színek, háttér, betűtípus, csempék', value: () => currentThemeName(), run: () => openThemeManager() },
+      { type: 'select', label: 'Billentyűzetkiosztás', desc: 'A gyorsbillentyűk a billentyűre nyomtatott betű szerint működnek, és ilyen a képernyő-billentyűzet is. Automatikus: a Windows aktuális kiosztását követi.', options: [['auto', `Automatikus – ${KbLayout.NAMES[KbLayout.detected()]}`], ...Object.entries(KbLayout.NAMES)], get: () => s.ui.kbLayout || 'auto', set: (v) => ({ ui: { kbLayout: v } }) },
       { type: 'select', label: 'Felület mérete', options: [[85, '85%'], [100, '100%'], [115, '115%'], [130, '130%'], [150, '150%']], get: () => s.ui.scale, set: (v) => ({ ui: { scale: Number(v) } }) },
       { type: 'text', label: 'Időjárás a felső sávban – város', desc: 'Üresen hagyva nem jelenik meg (adatforrás: Open-Meteo)', get: () => s.ui.weatherCity || '', set: (v) => ({ ui: { weatherCity: v.trim() } }), after: () => { if (typeof updateTopInfo === 'function') updateTopInfo(); } },
       { type: 'toggle', label: 'Dátum a felső sávban', get: () => s.ui.showDate !== false, set: (v) => ({ ui: { showDate: v } }), after: () => { if (typeof updateTopInfo === 'function') updateTopInfo(); } },
@@ -261,7 +276,7 @@ function settingsCategories() {
       { type: 'action', label: 'Kontroller teszt', run: () => controllerTester() },
     ] },
 
-    { id: 'display', icon: '▭', title: 'Kijelző és energia', sub: dispState, rows: [
+    { id: 'display', icon: 'energy', title: 'Kijelző és energia', sub: dispState, rows: [
       { type: 'info', label: 'Állapot', value: () => `${dispState} · fedél: ${{ open: 'nyitva', closed: 'lecsukva' }[ds.lid] || 'n/a'}` },
       { group: 'Külső kijelző' },
       { type: 'toggle', label: 'Konzol mód külső kijelzőn', desc: 'Kijelző csatlakoztatásakor boot animációval indul a konzol', get: () => d.autoConsole, set: (v) => ({ display: { autoConsole: v } }) },
@@ -286,7 +301,7 @@ function settingsCategories() {
       { type: 'action', label: 'Automatikus bejelentkezés gépindításkor', desc: 'Újraindítás után se kelljen PIN – útmutató', run: () => autoLogonGuide() },
     ] },
 
-    { id: 'stream', icon: '▶', title: 'Streaming', sub: moon ? 'Moonlight + Sunshine' : 'Beépített InariX stream', rows: [
+    { id: 'stream', icon: 'stream', title: 'Streaming', sub: moon ? 'Moonlight + Sunshine' : 'Beépített InariX stream', rows: [
       { type: 'select', label: 'Stream motor', desc: 'Beépített: nem kell hozzá Sunshine és Moonlight (a gaming PC-n InariX Host mód kell)',
         options: [['builtin', 'Beépített (InariX)'], ['moonlight', 'Moonlight + Sunshine']], get: () => s.stream.engine || 'builtin', set: (v) => ({ stream: { engine: v } }) },
       { group: 'Kép' },
@@ -310,7 +325,7 @@ function settingsCategories() {
       ] : []),
     ] },
 
-    { id: 'host', icon: '⌂', title: 'Gaming PC (Host mód)', sub: hm.enabled ? `Bekapcsolva${st.hostRunning ? ' · fut' : ''}` : 'Kikapcsolva – csak a gaming PC-n kell', rows: [
+    { id: 'host', icon: 'hosts', title: 'Gaming PC (Host mód)', sub: hm.enabled ? `Bekapcsolva${st.hostRunning ? ' · fut' : ''}` : 'Kikapcsolva – csak a gaming PC-n kell', rows: [
       { type: 'toggle', label: 'Host mód', desc: `Azon a gépen kapcsold be, amelyiken a játékok futnak – a laptop innen indít és streamel (port ${hm.port})`, get: () => hm.enabled, set: (v) => ({ hostMode: { enabled: v } }) },
       ...(hm.enabled ? [
         { type: 'text', label: 'Gép neve', get: () => hm.name, set: (v) => ({ hostMode: { name: v } }) },
@@ -332,7 +347,7 @@ function settingsCategories() {
       ] : []),
     ] },
 
-    { id: 'system', icon: '⚙', title: 'Rendszer', sub: S.update ? `Frissítés elérhető: ${S.update.build}` : `InariX ${st.version}`, rows: [
+    { id: 'system', icon: 'system', title: 'Rendszer', sub: S.update ? `Frissítés elérhető: ${S.update.build}` : `InariX ${st.version}`, rows: [
       S.update
         ? { type: 'action', label: `Frissítés elérhető (${S.update.build})`, desc: `A(z) ${S.update.hostName} gépről · jelenlegi: ${S.update.current}`, value: () => 'Telepítés ›', cls: 'linked', run: () => installUpdateFlow() }
         : { type: 'action', label: 'Frissítések keresése', desc: 'Automatikusan is: indításkor és 5 percenként, ha nincs stream', run: async () => { const i = await gamo.updateCheck(); S.update = i; toast(i ? `Új verzió: ${i.build}` : 'A InariX naprakész (vagy a gaming PC frissítő szervere nem fut)', i ? 'ok' : ''); renderSettings(); } },
@@ -361,13 +376,13 @@ function renderSettings() {
   const cur = Nav.current();
   const navFocus = cur && nav.contains(cur) ? cur.dataset.cat : null;
   const fill = (c) => {
-    pane.querySelector('h2').textContent = `${c.icon}  ${c.title}`;
+    pane.querySelector('h2').replaceChildren(glyphIcon(c.icon, 'h2-ico'), c.title);
     pane.querySelector('.set-sub').textContent = c.sub || '';
     renderRows(pane.querySelector('.set-rows'), c.rows, renderSettings);
   };
   nav.replaceChildren(...cats.map((c) => {
     const b = h('button', { class: `set-cat focusable${c.id === S.setCat ? ' active' : ''}`, dataset: { cat: c.id, default: c.id === S.setCat ? '1' : '0' } },
-      h('span', { class: 'ci' }, c.icon), h('span', { class: 'ct' }, c.title, h('small', {}, c.sub || '')));
+      h('span', { class: 'ci' }, glyphIcon(c.icon)), h('span', { class: 'ct' }, c.title, h('small', {}, c.sub || '')));
     b.addEventListener('navfocus', () => {
       if (S.setCat === c.id) return;
       S.setCat = c.id;

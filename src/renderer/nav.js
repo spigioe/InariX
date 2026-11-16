@@ -88,6 +88,27 @@ const Nav = (() => {
       const score = primary + secondary * 2.5;
       if (score < bestScore) { bestScore = score; best = el; }
     }
+    // fel/le: mindig a legközelebbi sorba lépünk (a távolabbi, de pont alatta lévő elem nem előzheti meg),
+    // azon belül a vízszintesen legközelebbire
+    if (best && (dir === 'up' || dir === 'down')) {
+      const gap = (b) => (dir === 'down' ? b.top - r.top : r.bottom - b.bottom);
+      let near = Infinity;
+      const ok = [];
+      for (const el of els) {
+        if (el === cur) continue;
+        const b = el.getBoundingClientRect();
+        if (dir === 'down' && (b.top < r.bottom - Math.min(r.height * 0.25, 40) || b.top < r.top + 2)) continue;
+        if (dir === 'up' && (b.bottom > r.top + Math.min(r.height * 0.25, 40) || b.bottom > r.bottom - 2)) continue;
+        ok.push([el, b]);
+        near = Math.min(near, gap(b));
+      }
+      let bs = Infinity;
+      for (const [el, b] of ok) {
+        if (gap(b) > near + Math.max(30, b.height * 0.5)) continue; // nem a legközelebbi sorban van
+        const d = Math.abs(b.left + b.width / 2 - cx);
+        if (d < bs) { bs = d; best = el; }
+      }
+    }
     if (best) focus(best);
     else dispatch(`edge-${dir}`);
   }
@@ -108,12 +129,14 @@ const Nav = (() => {
   }
 
   // --- Billentyűzet ---
-  const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'a', Escape: 'b', Backspace: 'b', KeyQ: 'lb', KeyE: 'rb', KeyX: 'x', KeyY: 'y', F5: 'y', Tab: 'rb', KeyF: 'select', KeyG: 'guide', Home: 'guide', KeyM: 'start' };
+  const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Enter: 'a', Escape: 'b', Backspace: 'b', F5: 'y', Tab: 'rb', Home: 'guide' };
+  // betűs gyorsbillentyűk a billentyűre nyomtatott betű szerint (a kiosztástól függetlenül: magyar QWERTZ-en az Y az Y)
+  const LETTERS = { q: 'lb', e: 'rb', x: 'x', y: 'y', f: 'select', g: 'guide', m: 'start' };
   window.addEventListener('keydown', (e) => {
     if (suspended) return;
     document.body.classList.remove('pad-mode');
     if (keyboardCapture && keyboardCapture(e)) { e.preventDefault(); return; }
-    const a = KEYMAP[e.code];
+    const a = KEYMAP[e.code] || LETTERS[KbLayout.letter(e)];
     if (!a) return;
     if (e.code === 'Tab' && e.shiftKey) { e.preventDefault(); dispatch('lb'); return; }
     e.preventDefault();

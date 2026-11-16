@@ -13,7 +13,7 @@ const moonlight = require('./moonlight');
 const power = require('./power');
 const { scanAll } = require('../core/scanner');
 const { launchGame, installGame, gameAction, powerAction, diskInfo, runningGames, quitGame } = require('../core/launcher');
-const { steamSearch, steamStoreRows, ownedGames } = require('../core/store');
+const { steamSearch, steamStoreRows, gogSearch, gogStoreRows, ownedGames } = require('../core/store');
 const { run } = require('../core/util');
 const { discover, wakeOnLan, agentRequest, AGENT_PORT } = require('../core/net');
 const { createAgent, newToken, VERSION } = require('../core/agent-server');
@@ -566,7 +566,7 @@ function registerIpc() {
   handle('network', () => networkInfo());
 
   // ---- Áruház ----
-  handle('store-rows', () => steamStoreRows());
+  handle('store-rows', (shop) => (shop === 'gog' ? gogStoreRows() : steamStoreRows()));
 
   // ---- Témák export / import ----
   handle('theme-export', (theme) => {
@@ -599,7 +599,7 @@ function registerIpc() {
     }
     return (await agentRequest(h, 'GET', '/api/owned', null, 60000)).games;
   });
-  handle('store-search', (q) => steamSearch(q));
+  handle('store-search', (q, shop) => (shop === 'gog' ? gogSearch(q) : steamSearch(q)));
   handle('discover', () => discover(1800));
   handle('host-add', async (h) => {
     const host = {
@@ -816,7 +816,9 @@ async function enableAdminMode() {
   applyAutostart();
   log('[admin] rendszergazdai mód bekapcsolva – újraindítás emelt joggal');
   // a régi példány kilép, majd az ütemezett feladat emelt joggal újraindítja
-  spawn('cmd.exe', ['/c', `timeout /t 2 /nobreak >nul & schtasks /Run /TN "${ADMIN_TASK}"`], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+  // (a timeout konzol nélkül azonnal hibával kilép, ezért ping-gel várunk, amíg ez a példány leáll)
+  try { fs.writeFileSync(path.join(app.getPath('userData'), 'show-once'), '1'); } catch {}
+  spawn('cmd.exe', ['/c', `ping 127.0.0.1 -n 4 >nul & schtasks /Run /TN "${ADMIN_TASK}"`], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
   setTimeout(() => { app.isQuitting = true; app.quit(); }, 300);
   return true;
 }
@@ -1091,7 +1093,11 @@ app.whenReady().then(async () => {
   powerMonitor.on('resume', () => { log('[power] ébredés'); display.send('QUERY'); });
   await display.start();
 
-  if (!START_HIDDEN || FORCE_BOOT) win.once('ready-to-show', () => showConsole({ boot: true }));
+  // a rendszergazdai mód bekapcsolása utáni emelt újraindítás (--background) is jelenjen meg
+  const showOnce = path.join(app.getPath('userData'), 'show-once');
+  let shownOnce = false;
+  try { if (fs.existsSync(showOnce)) { fs.unlinkSync(showOnce); shownOnce = true; } } catch {}
+  if (!START_HIDDEN || FORCE_BOOT || shownOnce) win.once('ready-to-show', () => showConsole({ boot: true }));
   log(`InariX ${VERSION} elindult${START_HIDDEN ? ' (háttér)' : ''}`);
   if (process.env.INARIX_SCRIPT) runTestScript(process.env.INARIX_SCRIPT);
 });
