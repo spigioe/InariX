@@ -1,0 +1,23 @@
+{
+  "name": "inarix",
+  "productName": "InariX",
+  "version": "0.8.0-alpha",
+  "description": "Konzolos felület laptopra, távoli gépről streamelt játékokkal (Sunshine/Moonlight).",
+  "main": "src/main/main.js",
+  "author": "InariX",
+  "license": "MIT",
+  "scripts": {
+    "start": "node scripts/start.js",
+    "boot": "node scripts/start.js --boot",
+    "agent": "node host-agent/agent.js",
+    "update-server": "node scripts/update-server.js",
+    "icons": "node scripts/make-icons.js",
+    "test": "node scripts/selftest.js && node scripts/lidtest.js && node scripts/locktest.js",
+    "release": "node scripts/publish-release.js",
+    "package": "node scripts/build-updater.js && node scripts/render-icons.js && electron-packager . InariX --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/icon.ico --ignore=^/dist --ignore=^/scripts --ignore=^/installer --ignore=^/host-agent --prune=true --app-copyright=InariX --win32metadata.ProductName=InariX --win32metadata.FileDescription=InariX && node scripts/post-package.js"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.3.6",
+    "electron": "^33.2.1"
+  }
+}

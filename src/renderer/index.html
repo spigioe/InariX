@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https: data: file:; style-src 'self' 'unsafe-inline'; script-src 'self'; media-src 'self' https: blob:">
+  <title>InariX</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="bg"><div id="bg-custom"></div><div id="bg-img"></div><video id="bg-video" muted playsinline loop></video><div id="bg-shade"></div></div>
+
+  <div id="app">
+    <header id="topbar">
+      <div class="brand"><img class="brand-logo" src="../../assets/inarix-fox.svg" alt=""><span>INARIX</span><span id="page-title"></span></div>
+      <nav id="tabs">
+        <span class="bumper">LB</span>
+        <button class="tab" data-tab="library">Könyvtár</button>
+        <button class="tab" data-tab="store">Áruház</button>
+        <button class="tab" data-tab="browser">Böngésző</button>
+        <button class="tab" data-tab="hosts">Gépek</button>
+        <button class="tab" data-tab="settings">Beállítások</button>
+        <span class="bumper">RB</span>
+      </nav>
+      <div class="status">
+        <span id="host-chip" class="chip"><i class="dot"></i><span id="host-name">Ez a gép</span></span>
+        <span id="pad-ind" class="ind" title="Kontroller">🎮</span>
+        <span id="battery" class="ind"></span>
+        <span id="wx" class="ind"></span>
+        <span id="clock"></span>
+        <button id="power-btn" class="power-btn" title="Kilépés és energia"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v8"/><path d="M6.3 6.8a8 8 0 1 0 11.4 0"/></svg></button>
+      </div>
+    </header>
+
+    <main id="screens">
+      <section class="screen" id="screen-home">
+        <div id="home-scroll">
+          <div id="hero">
+            <div id="hero-meta">
+              <div id="hero-store" class="badge"></div>
+              <h1 id="hero-title"></h1>
+              <div id="hero-sub"></div>
+              <div id="hero-actions"></div>
+            </div>
+          </div>
+          <div id="home-rows"></div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-library">
+        <div class="lib-wrap">
+          <div class="set-nav lib-nav" id="lib-nav"></div>
+          <div class="lib-main">
+            <div class="lib-head"><div><h2 id="lib-title"></h2><div id="lib-count" class="set-sub"></div></div><div class="lib-tools" id="lib-tools"></div></div>
+            <div id="lib-grid" class="lib-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-store">
+        <div class="store-bar">
+          <button class="focusable search-box" id="store-search"><span class="ico">⌕</span><span id="store-q" class="ph">Keresés a Steam áruházban…</span></button>
+          <button class="focusable pill" id="store-home">Kiemelt</button>
+          <button class="focusable pill" id="store-wish">♡ Kívánságlista</button>
+          <button class="focusable pill" id="store-owned">Saját, nem telepített</button>
+          <button class="focusable pill store-target" id="store-target">Telepítés ide: <b id="store-host"></b> ▾</button>
+        </div>
+        <div id="store-title" class="section-title">Népszerű keresések</div>
+        <div id="store-rows"></div>
+        <div id="store-grid" class="grid"></div>
+      </section>
+
+      <section class="screen" id="screen-browser">
+        <div class="br-bar">
+          <button class="focusable br-btn" id="br-back" title="Vissza">‹</button>
+          <button class="focusable br-btn" id="br-fwd" title="Előre">›</button>
+          <button class="focusable br-btn" id="br-reload" title="Újratöltés">⟳</button>
+          <button class="focusable br-btn" id="br-home" title="Kezdőlap">⌂</button>
+          <button class="focusable search-box br-url" id="br-url"></button>
+          <button class="focusable br-btn" id="br-star" title="Könyvjelző">☆</button>
+          <button class="focusable br-btn br-zoom" id="br-zoom" title="Nagyítás">100%</button>
+          <button class="focusable pill primary br-pagebtn" id="br-page" title="Oldal vezérlése kontrollerrel">Oldal ▾</button>
+          <button class="focusable br-btn" id="br-menu" title="Menü">⋯</button>
+        </div>
+        <div class="br-progress"><i></i></div>
+        <div id="br-view">
+          <div id="br-start"></div>
+          <div id="br-cursor" class="hidden" popover="manual"></div>
+          <div id="br-fs-bar" popover="manual"><b>Teljes képernyő</b> · Kilépés: Ⓑ vagy Esc · Select+Start nyomva tartva: eszköztár · bal kar: kurzor</div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-hosts">
+        <div class="section-title">Gépek</div>
+        <div id="host-list" class="cards"></div>
+        <div class="section-title small">Hozzáadás</div>
+        <div class="cards">
+          <button class="focusable card action-card" id="host-discover"><div class="big">⌖</div><div>Keresés a hálózaton</div></button>
+          <button class="focusable card action-card" id="host-manual"><div class="big">＋</div><div>Kézi hozzáadás (IP)</div></button>
+        </div>
+        <div class="help" id="hosts-help"></div>
+      </section>
+
+      <section class="screen" id="screen-settings">
+        <div id="settings-list"></div>
+      </section>
+    </main>
+
+    <footer id="hints"></footer>
+  </div>
+
+  <div id="launch" class="hidden">
+    <div id="launch-bg"></div>
+    <div id="launch-inner">
+      <img id="launch-cover" alt="">
+      <div>
+        <div id="launch-title"></div>
+        <div id="launch-status"><span class="spinner"></span><span id="launch-text"></span></div>
+        <div class="hint"><b class="btn-b">B</b> Mégse</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="detail" class="hidden">
+    <div id="detail-bg"></div>
+    <div id="detail-inner">
+      <div class="d-left"><div id="d-cover"></div><div id="d-stats"></div></div>
+      <div class="d-main">
+        <div id="d-badges"></div>
+        <h1 id="d-title"></h1>
+        <div id="d-sources"></div>
+        <div id="d-actions"></div>
+        <div id="d-info"></div>
+        <div id="d-shots"></div>
+      </div>
+    </div>
+    <div class="d-hints"><span class="hint"><b class="btn-a">A</b> Kiválasztás</span><span class="hint"><b class="btn-y">Y</b> Kedvenc</span><span class="hint"><b class="btn-b">B</b> Vissza</span></div>
+  </div>
+
+  <div id="saver" class="hidden"><div class="saver-box"><div class="saver-clock"></div><div class="saver-sub"></div></div></div>
+
+  <div id="modal-layer" class="hidden"></div>
+  <div id="osk" class="hidden">
+    <div id="osk-panel">
+      <div id="osk-title"></div>
+      <div id="osk-field"><span id="osk-value"></span><span class="caret"></span></div>
+      <div id="osk-keys"></div>
+      <div class="osk-hints"><span class="hint"><b class="btn-x">X</b> Törlés</span><span class="hint"><b class="btn-y">Y</b> Szóköz</span><span class="hint"><b class="btn-start">≡</b> Kész</span><span class="hint"><b class="btn-b">B</b> Mégse</span></div>
+    </div>
+  </div>
+  <div id="toasts"></div>
+
+  <div id="boot" class="hidden">
+    <div class="boot-stage">
+      <img class="boot-logo" id="boot-logo" src="../../assets/inarix-logo.svg" alt="">
+      <div class="boot-word">INARIX</div>
+    </div>
+    <div class="boot-flash"></div>
+  </div>
+
+  <script src="sound.js"></script>
+  <script src="nav.js"></script>
+  <script src="osk.js"></script>
+  <script src="rows.js"></script>
+  <script src="../stream/rtc-common.js"></script>
+  <script src="stream-client.js"></script>
+  <script src="app.js"></script>
+  <script src="settings.js"></script>
+  <script src="home.js"></script>
+  <script src="extras.js"></script>
+  <script src="themes.js"></script>
+  <script src="browser.js"></script>
+</body>
+</html>

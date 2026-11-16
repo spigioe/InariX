@@ -1,0 +1,11 @@
+html,body{margin:0;height:100%;background:transparent;font-family:"Segoe UI Variable Display","Segoe UI",sans-serif;color:#f4f4f5;overflow:hidden}
+#dim{position:fixed;inset:0;background:rgba(0,0,0,.45)}
+#panel{position:fixed;left:0;top:0;bottom:0;width:min(420px,32vw);background:rgba(16,18,26,.94);border-right:1px solid rgba(255,255,255,.1);padding:34px 26px;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;animation:in .18s ease}
+@keyframes in{from{transform:translateX(-30px);opacity:0}}
+#clock{color:#a1a1aa;font-size:15px}
+h1{margin:4px 0 18px;font-size:28px}
+.it{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-radius:12px;background:rgba(255,255,255,.05);font-size:17px;font-weight:600;border:2px solid transparent}
+.it small{color:#a1a1aa;font-weight:500;font-size:13px}
+.it.sel{border-color:#fff;background:rgba(255,255,255,.12)}
+.it.danger{color:#fca5a5}
+#hint{margin-top:auto;color:#a1a1aa;font-size:13px}
