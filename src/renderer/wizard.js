@@ -10,6 +10,7 @@ async function setupWizard() {
   return new Promise((resolve) => {
     const root = h('div', { id: 'wizard' });
     document.body.append(root);
+    document.body.classList.add('wizard-open');
     const st = { i: 0, role: null, found: null, searching: false, added: [], fw: false };
     const save = async (p) => { try { applyState(await gamo.settings(p)); } catch (e) { toast(e.message, 'err'); } };
 
@@ -24,7 +25,7 @@ async function setupWizard() {
     const go = (d) => { const L = steps(); st.i = Math.max(0, Math.min(L.length - 1, st.i + d)); Sound[d > 0 ? 'select' : 'back'](); render(); };
     const finish = async (then) => {
       await save({ setupDone: true });
-      Nav.pop(); root.remove(); resolve();
+      Nav.pop(); root.remove(); document.body.classList.remove('wizard-open'); resolve();
       loadLibrary(true);
       if (then) then();
     };

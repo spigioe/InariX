@@ -35,10 +35,27 @@ const Nav = (() => {
         // vízszintes polc: csak a polcot görgetjük, középre igazítva
         const p = el.parentElement;
         p.scrollTo({ left: el.offsetLeft - p.clientWidth / 2 + el.offsetWidth / 2, behavior: 'smooth' });
-      } else el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      } else {
+        // ha a kijelölt elem fölött csoportcím van (pl. menü blokk címe), az is maradjon látható – különben felfelé lépve levágódik
+        const prev = el.previousElementSibling;
+        const sc = prev && prev.matches('.set-group, .lib-group') ? scrollParent(el) : null;
+        if (sc) {
+          const s = sc.getBoundingClientRect(), p = prev.getBoundingClientRect(), r = el.getBoundingClientRect();
+          if (p.top < s.top + 8) sc.scrollBy({ top: p.top - s.top - 12, behavior: 'smooth' });
+          else if (r.bottom > s.bottom - 8) sc.scrollBy({ top: r.bottom - s.bottom + 18, behavior: 'smooth' });
+        } else el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      }
     }
     el.dispatchEvent(new CustomEvent('navfocus', { bubbles: true, detail: { scroll } }));
     if (!silent) Sound.move();
+  }
+
+  function scrollParent(el) {
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowY;
+      if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+    }
+    return null;
   }
 
   function focusFirst() {

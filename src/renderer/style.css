@@ -694,3 +694,10 @@ body[data-page="home"] #screen-home #hero-actions { display: none; }
 .wz-btn { padding: .8em 1.8em; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-weight: 700; font-size: 1em; transition: transform .15s, box-shadow .15s; }
 .wz-btn.primary { background: var(--grad); border-color: transparent; color: #fff; }
 .wz-btn.focused { box-shadow: var(--focus); transform: scale(1.04); }
+
+/* a varázsló fölött a felugró ablakok, a képernyő-billentyűzet és az értesítések is látszódjanak */
+body.wizard-open #modal-layer { z-index: 310; }
+body.wizard-open #osk { z-index: 320; }
+
+/* billentyűzet / egér módban a gombjelzés billentyű sapkaként jelenik meg */
+.hint b.kbd, .osk-hints b.kbd { width: auto; min-width: 1.7em; height: 1.7em; padding: 0 .55em; border-radius: .4em; background: var(--panel-solid); border: 1px solid var(--line); border-bottom-width: 2px; color: var(--text); font-weight: 700; font-size: .78em; font-family: "Segoe UI", sans-serif; }

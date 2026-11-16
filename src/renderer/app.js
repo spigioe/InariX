@@ -137,8 +137,13 @@ const globalHandlers = {
   },
 };
 
+// Billentyűzet / egér mód: a kontroller gombok helyett a megfelelő billentyűk (a Nav KEYMAP szerint)
+const KB_KEYS = { A: 'Enter', B: 'Esc', X: 'X', Y: 'Y', LB: 'Q', RB: 'E', '≡': 'M', '⧉': 'F', 'LB/RB': 'Q / E' };
 function renderHints() {
-  const H = (cls, k, t) => h('span', { class: 'hint' }, h('b', { class: cls }, k), t);
+  const pad = document.body.classList.contains('pad-mode');
+  const H = (cls, k, t) => (pad || !KB_KEYS[k]
+    ? h('span', { class: 'hint' }, h('b', { class: cls }, k), t)
+    : h('span', { class: 'hint' }, h('b', { class: 'kbd' }, KB_KEYS[k]), t));
   const list = {
     home: [H('btn-a', 'A', S.homeHintA || 'Kiválasztás'), H('btn-x', 'X', 'Adatlap'), H('btn-y', 'Y', 'Keresés'), H('btn-start', '≡', 'Menü'), H('btn-b', 'B', 'Kilépés')],
     library: [H('btn-a', 'A', 'Játék'), H('btn-x', 'X', 'Adatlap'), H('btn-y', 'Y', 'Keresés'), H('btn-start', 'LB/RB', 'Kategória'), H('btn-b', 'B', 'Kezdőlap')],
@@ -942,6 +947,9 @@ async function init() {
   if (typeof Browser !== 'undefined') Browser.init();
   if (typeof initAccountEvents === 'function') initAccountEvents();
   if (typeof initUpdateEvents === 'function') initUpdateEvents();
+  // a bemeneti mód (kontroller ↔ billentyűzet/egér) váltásakor a gombjelzések is váltanak
+  let wasPad = document.body.classList.contains('pad-mode');
+  new MutationObserver(() => { const p = document.body.classList.contains('pad-mode'); if (p !== wasPad) { wasPad = p; renderHints(); } }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   Nav.onInput(touch);
   document.addEventListener('mousemove', () => { touch(); if (S.saver) hideSaver(); });
   window.addEventListener('gamepadconnected', (e) => toast(`Kontroller csatlakoztatva: ${e.gamepad.id.replace(/\(.*\)/, '').trim() || 'gamepad'}`, 'ok', 2500));

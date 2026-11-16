@@ -82,6 +82,15 @@ const OSK = (() => {
     if (r) r(ok ? value : null);
   }
 
+  // gombjelzések a bemeneti módnak megfelelően (kontroller ↔ billentyűzet)
+  function renderHints() {
+    const pad = document.body.classList.contains('pad-mode');
+    const L = pad ? [['btn-x', 'X', 'Törlés'], ['btn-y', 'Y', 'Szóköz'], ['btn-start', '≡', 'Kész'], ['btn-b', 'B', 'Mégse']]
+      : [['kbd', 'Backspace', 'Törlés'], ['kbd', 'Szóköz', 'Szóköz'], ['kbd', 'Enter', 'Kész'], ['kbd', 'Esc', 'Mégse']];
+    el('osk-hints').replaceChildren(...L.map(([c, k, t]) => { const s = document.createElement('span'); s.className = 'hint'; const b = document.createElement('b'); b.className = c; b.textContent = k; s.append(b, ` ${t}`); return s; }));
+  }
+  new MutationObserver(() => { if (!el('osk').classList.contains('hidden')) renderHints(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
   function prompt({ title = '', value: initial = '', password = false } = {}) {
     return new Promise((resolve) => {
       resolver = resolve;
@@ -89,6 +98,7 @@ const OSK = (() => {
       el('osk-title').textContent = title;
       build(); render();
       el('osk').classList.remove('hidden');
+      renderHints();
       Nav.push(() => el('osk-keys'), {
         b: () => done(false),
         x: () => { value = value.slice(0, -1); render(); },
