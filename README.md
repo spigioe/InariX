@@ -21,7 +21,15 @@ A teljes funkciólista: [FEATURES.md](FEATURES.md).
    - a telepítési mappát (alapból `%LOCALAPPDATA%\Programs\InariX`),
    - hogy kérsz-e asztali parancsikont,
    - és ha a gépen korábbi InariX adatot talál, hogy **tiszta telepítést** kérsz (a korábbi beállítások és adatok törlésével) vagy **megtartod** a korábbi beállításokat.
-4. A végén az InariX azonnal indítható. Első indításkor egy **varázsló** végigvezet a beállításon.
+4. A végén az InariX azonnal indítható.
+
+**Első indítás:** teljes képernyős varázsló vezet végig a beállításon (kontrollerrel is):
+1. A gép szerepe: Laptop, Gaming PC, vagy mindkettő.
+2. Gaming PC esetén: Host mód és PIN, tűzfal, kontroller driver, rendszergazdai mód.
+3. Laptop esetén: a gaming PC megkeresése és párosítása, valamint a konzol mód (Mindig kész, PIN dokkoláskor).
+4. Téma kiválasztása, végül opcionálisan a játékfiókok csatlakoztatása.
+
+A varázsló később is elindítható: Beállítások → Rendszer → Első beállítás varázsló.
 
 A telepítő Start menü parancsikont hoz létre, és felveszi az InariX-et a Windows **Telepített alkalmazások** listájára.
 
