@@ -327,11 +327,11 @@ const Browser = (() => {
       const H = (cls, k, t) => { const s = document.createElement('span'); s.className = 'hint'; const b = document.createElement('b'); b.className = cls; b.textContent = k; s.append(b, t); return s; };
       const v = B.vstate && B.vstate.has;
       const L = B.app.rawPad ? [H('btn-start', 'Guide', 'Kilépés')]
-        : B.app.map ? (pad ? [H('btn-start', '✚', 'Mozgatás'), H('btn-start', 'LT/RT', 'Nagyítás'), H('btn-start', 'L', 'Kurzor'), H('btn-a', 'A', 'Kattintás'), H('btn-start', '≡', 'Appok'), H('btn-start', 'Guide', 'Kilépés')]
+        : B.app.map ? (pad ? [H('btn-start', '✚', 'Mozgatás'), H('btn-start', 'LT/RT', 'Nagyítás'), H('btn-start', 'L', 'Kurzor'), H('btn-a', 'A', 'Kattintás'), H('btn-start', '⧉', 'Appok'), H('btn-start', '≡', 'Kilépés'), H('btn-start', 'Guide', 'Menü')]
           : [H('kbd', 'Nyilak', 'Mozgatás'), H('kbd', 'Görgő', 'Nagyítás'), H('kbd', 'F9', 'Appok'), H('kbd', 'Esc', 'Kilépés')])
         : !pad ? [H('kbd', 'Nyilak', 'Navigáció'), H('kbd', 'Enter', 'Kiválasztás'), H('kbd', 'F9', 'Appok'), H('kbd', 'F10', 'Gombsáv'), H('kbd', 'Alt+←/→', 'Vissza / előre'), ...(v ? [H('kbd', 'Szóköz', 'Lejátszás / szünet'), H('kbd', 'F', 'Teljes képernyő')] : []), H('kbd', 'Esc', 'Kilépés')]
-          : v ? [H('btn-a', 'A', 'Kattintás'), H('btn-y', 'Y', B.vstate.paused ? 'Lejátszás' : 'Szünet'), H('btn-start', 'LT/RT', '−/+ 10 mp'), H('btn-x', 'X', 'Teljes képernyő'), H('btn-start', '≡', 'Appok'), H('btn-start', 'Guide', 'Kilépés')]
-            : [H('btn-start', '✚', 'Navigáció'), H('btn-a', 'A', 'Kiválasztás'), H('btn-start', 'LB/RB', 'Vissza / előre'), H('btn-x', 'X', 'Gépelés'), H('btn-start', '≡', 'Appok'), H('btn-start', 'Guide', 'Kilépés')];
+          : v ? [H('btn-a', 'A', 'Kattintás'), H('btn-x', 'X', 'Billentyűzet'), H('btn-y', 'Y', B.vstate.paused ? 'Lejátszás' : 'Szünet'), H('btn-start', 'LT/RT', '−/+ 10 mp'), H('btn-start', 'R3', 'Teljes képernyő'), H('btn-start', '⧉', 'Appok'), H('btn-start', '≡', 'Kilépés'), H('btn-start', 'Guide', 'Menü')]
+            : [H('btn-start', '✚', 'Navigáció'), H('btn-a', 'A', 'Kiválasztás'), H('btn-x', 'X', 'Billentyűzet'), H('btn-start', 'LB/RB', 'Vissza / előre'), H('btn-start', '⧉', 'Appok'), H('btn-start', '≡', 'Kilépés'), H('btn-start', 'Guide', 'Menü')];
       el.querySelector('.ah-list').replaceChildren(...L);
       const bk = el.querySelector('.ah-btn');
       if (bk) { bk.disabled = !(B.wv && B.ready && B.wv.canGoBack()); bk.nextSibling.disabled = !(B.wv && B.ready && B.wv.canGoForward()); }
@@ -659,6 +659,18 @@ const Browser = (() => {
       if (field && t) setTimeout(() => sendKey('Enter'), 60);
     } catch { /* */ }
   }
+  // gyorsmenü az appból: bezárása után vissza az app oldalára
+  function quickFromApp() {
+    leavePage({ focus: false });
+    openQuick();
+    const iv = setInterval(() => { if (!S.quickOpen) { clearInterval(iv); if (B.app && S.tab === 'browser' && B.showPage) enterPage(); } }, 200);
+  }
+  // kurzorral kattintás után: ha a kattintás szövegmezőbe került, megnyílik a billentyűzet (a mező tartalmával)
+  async function openKbdIfField() {
+    if (!B.wv || !B.ready || B.mode !== 'page' || (typeof OSK !== 'undefined' && OSK.open)) return;
+    const f = await B.wv.executeJavaScript('(()=>{const e=document.activeElement; if(!e || !(e.isContentEditable || (/^(INPUT|TEXTAREA)$/.test(e.tagName) && !/^(button|submit|checkbox|radio|range|color|file|image|reset)$/i.test(e.type)))) return null; return { value: e.isContentEditable ? e.innerText.replace(/\\n$/, "") : e.value || "", label: e.getAttribute("aria-label") || e.getAttribute("placeholder") || "", password: e.type === "password" }; })()', true).catch(() => null);
+    if (f) typeText(f);
+  }
   // Ⓐ: ha a D-paddal kijelölt elemen állunk (a kurzor rejtve), azt aktiválja – szövegmezőn a képernyő-billentyűzet nyílik
   async function activateFocused() {
     if (!B.wv || !B.ready) return false;
@@ -684,10 +696,9 @@ const Browser = (() => {
     const v = B.vstate;
     if (!v || !v.has) return false;
     if (i === 3) { player('toggle'); return true; }
-    if (i === 2) { player('fs'); return true; }
+    if (i === 11) { player('fs'); return true; }
     if (i === 6) { player('seek', -10); return true; }
     if (i === 7) { player('seek', 10); return true; }
-    if (i === 11) { player('mute'); return true; }
     if (i === 0 && B.fullscreen) { player('toggle'); return true; }
     return false;
   }
@@ -707,13 +718,16 @@ const Browser = (() => {
   }
   const mapZoom = (d) => mapCmd('zoom', d);
   function onButton(i, phase) {
-    if (phase === 'up') { if (i === 0 && B.mouseDown) sendMouse('mouseUp'); return; }
+    if (phase === 'up') {
+      if (i === 0 && B.mouseDown) { sendMouse('mouseUp'); if (B.app) setTimeout(openKbdIfField, 180); } // szövegmezőre kattintva billentyűzet
+      return;
+    }
     S.lastInput = Date.now();
-    if (i === 16) { confirmExit(); return; } // Guide: kilépés megerősítéssel – mindig (teljes képernyős videóban is)
-    if (B.app && B.app.rawPad) return; // felhős játék: minden más gomb a játéké
+    if (B.app && B.app.rawPad) { if (i === 16) confirmExit(); return; } // felhős játék: csak a Guide az InariX-é (kilépés)
+    if (i === 16) { quickFromApp(); return; } // Guide: oldalsó gyorsmenü
+    if (B.app && i === 9) { confirmExit(); return; } // ≡: kilépés menü (háttérbe / kilépés)
+    if (B.app && i === 8) { appSwitcher(); return; } // ⧉: megnyitott appok
     if (B.app && playerButton(i)) return;
-    if (B.app && i === 8) { confirmExit(); return; }
-    if (B.app && i === 9 && !B.fullscreen) { appSwitcher(); return; }
     // térkép appok: LT/RT nagyítás (a D-pad nyilakkal mozgat, a bal kar kurzor, Ⓐ kattint)
     if (B.app && B.app.map && (i === 6 || i === 7)) { mapZoom(i === 7 ? 1 : -1); return; }
     if (B.app && B.app.map && i >= 12 && i <= 15) { const st = 160; mapCmd('pan', i === 14 ? -st : i === 15 ? st : 0, i === 12 ? -st : i === 13 ? st : 0); return; }
@@ -900,8 +914,9 @@ const Browser = (() => {
     return {
       y: () => { promptAddress(); return true; },
       x: () => { if (B.showPage) enterPage(); return true; },
-      start: () => { if (B.app || openApps().length) appSwitcher(); else menu(); return true; },
-      guide: () => { if (B.showPage || B.app) { confirmExit(); return true; } return false; },
+      start: () => { if (B.app) confirmExit(); else menu(); return true; },
+      select: () => { if (B.app || openApps().length) { appSwitcher(); return true; } return false; },
+      guide: () => { quickFromApp(); return true; },
       'edge-down': () => { if (B.showPage) enterPage(); },
       lt: () => back(), rt: () => forward(),
       b: () => {
