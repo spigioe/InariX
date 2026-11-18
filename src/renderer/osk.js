@@ -5,6 +5,9 @@ const OSK = (() => {
   // számmező: számbillentyűzet (a ⇄ ABC / 123 gombbal bármikor váltható a normál billentyűzetre és vissza)
   const NUM_ROWS = [['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9'], ['.', '0', '⌫'], ['ABC', '✓']];
   let value = '', shift = false, resolver = null, mask = false, numMode = false;
+  // élő mód (stream): minden leütés azonnal a gépre megy – live(kind, ch): kind = 'char' | 'back' | 'enter'
+  let live = null;
+  const emit = (kind, ch) => { if (live) { try { live(kind, ch); } catch { /* */ } } };
   const el = (id) => document.getElementById(id);
 
   function render() {
@@ -64,17 +67,21 @@ const OSK = (() => {
   }
 
   function press(k) {
-    if (k === '⌫') value = value.slice(0, -1);
+    if (k === '⌫') { value = value.slice(0, -1); emit('back'); }
     else if (k === '⇧') shift = !shift;
-    else if (k === '␣') value += ' ';
-    else if (k === '✓') return done(true);
+    else if (k === '␣') { value += ' '; emit('char', ' '); }
+    else if (k === '✓') { if (live) { emit('enter'); value = ''; render(); return; } return done(true); }
     else if (k === '123' || k === 'ABC') { numMode = k === '123'; shift = false; build(); render(); requestAnimationFrame(() => { const d = el('osk-keys').querySelector('[data-default="1"]'); if (d) Nav.focus(d); }); return; }
-    else { value += shift ? k.toUpperCase() : k; if (shift && /[a-zéáűőúöüóí]/.test(k)) shift = false; }
+    else { const c = shift ? k.toUpperCase() : k; value += c; emit('char', c); if (shift && /[a-zéáűőúöüóí]/.test(k)) shift = false; }
+    if (live && value.length > 60) value = value.slice(-60); // élő módban csak az utolsó leütések látszanak
     render();
   }
 
   function done(ok) {
     el('osk').classList.add('hidden');
+    el('osk').classList.remove('float');
+    el('osk-panel').style.transform = '';
+    live = null;
     Nav.setKeyboardCapture(null);
     Nav.pop();
     const r = resolver; resolver = null;
@@ -85,34 +92,56 @@ const OSK = (() => {
   // gombjelzések a bemeneti módnak megfelelően (kontroller ↔ billentyűzet)
   function renderHints() {
     const pad = document.body.classList.contains('pad-mode');
-    const L = pad ? [['btn-x', 'X', 'Törlés'], ['btn-y', 'Y', 'Szóköz'], ['btn-start', '≡', 'Kész'], ['btn-b', 'B', 'Mégse']]
-      : [['kbd', 'Backspace', 'Törlés'], ['kbd', 'Szóköz', 'Szóköz'], ['kbd', 'Enter', 'Kész'], ['kbd', 'Esc', 'Mégse']];
+    const L = live
+      ? (pad ? [['btn-x', 'X', 'Törlés'], ['btn-y', 'Y', 'Szóköz'], ['btn-start', 'R kar', 'Mozgatás'], ['btn-start', '≡', 'Enter'], ['btn-b', 'B', 'Bezárás']]
+        : [['kbd', 'Húzás', 'Mozgatás'], ['kbd', 'Enter', 'Enter'], ['kbd', 'Esc', 'Bezárás']])
+      : pad ? [['btn-x', 'X', 'Törlés'], ['btn-y', 'Y', 'Szóköz'], ['btn-start', '≡', 'Kész'], ['btn-b', 'B', 'Mégse']]
+        : [['kbd', 'Backspace', 'Törlés'], ['kbd', 'Szóköz', 'Szóköz'], ['kbd', 'Enter', 'Kész'], ['kbd', 'Esc', 'Mégse']];
     el('osk-hints').replaceChildren(...L.map(([c, k, t]) => { const s = document.createElement('span'); s.className = 'hint'; const b = document.createElement('b'); b.className = c; b.textContent = k; s.append(b, ` ${t}`); return s; }));
   }
   new MutationObserver(() => { if (!el('osk').classList.contains('hidden')) renderHints(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
-  function prompt({ title = '', value: initial = '', password = false, numeric = false } = {}) {
+  // lebegő panel mozgatása (képpontban, a jelenlegi helyéhez képest)
+  let pos = { x: 0, y: 0 };
+  function moveBy(dx, dy) {
+    const p = el('osk-panel');
+    const r = p.getBoundingClientRect();
+    pos.x = Math.max(-(innerWidth - r.width) / 2, Math.min((innerWidth - r.width) / 2, pos.x + dx));
+    pos.y = Math.max(-(innerHeight - r.height - 10), Math.min(0, pos.y + dy));
+    p.style.transform = `translate(${Math.round(pos.x)}px, ${Math.round(pos.y)}px)`;
+  }
+  (() => { // egérrel a címsoránál fogva húzható
+    let drag = null;
+    document.addEventListener('mousedown', (e) => { if (live && e.target.closest('#osk-title')) { drag = { x: e.clientX, y: e.clientY }; e.preventDefault(); } });
+    document.addEventListener('mousemove', (e) => { if (drag) { moveBy(e.clientX - drag.x, e.clientY - drag.y); drag = { x: e.clientX, y: e.clientY }; } });
+    document.addEventListener('mouseup', () => { drag = null; });
+  })();
+
+  function prompt({ title = '', value: initial = '', password = false, numeric = false, live: liveFn = null } = {}) {
     return new Promise((resolve) => {
       resolver = resolve;
       value = String(initial || ''); shift = false; mask = password; numMode = !!numeric;
+      live = liveFn;
       el('osk-title').textContent = title;
       build(); render();
+      el('osk').classList.toggle('float', !!live);
+      if (live) el('osk-panel').style.transform = `translate(${Math.round(pos.x)}px, ${Math.round(pos.y)}px)`;
       el('osk').classList.remove('hidden');
       renderHints();
       Nav.push(() => el('osk-keys'), {
         b: () => done(false),
-        x: () => { value = value.slice(0, -1); render(); },
-        y: () => { value += ' '; render(); },
-        start: () => done(true),
+        x: () => { value = value.slice(0, -1); emit('back'); render(); },
+        y: () => { value += ' '; emit('char', ' '); render(); },
+        start: () => { if (live) { emit('enter'); value = ''; render(); } else done(true); },
         left: () => oskMove('left'), right: () => oskMove('right'), up: () => oskMove('up'), down: () => oskMove('down'),
         lb: () => { shift = !shift; render(); },
         rb: () => { shift = !shift; render(); },
       });
       Nav.setKeyboardCapture((e) => {
-        if (e.key === 'Enter') { done(true); return true; }
+        if (e.key === 'Enter') { if (live) { emit('enter'); value = ''; render(); } else done(true); return true; }
         if (e.key === 'Escape') { done(false); return true; }
-        if (e.key === 'Backspace') { value = value.slice(0, -1); render(); return true; }
-        if (e.key.length === 1 && !e.ctrlKey && !e.altKey) { value += e.key; render(); return true; }
+        if (e.key === 'Backspace') { value = value.slice(0, -1); emit('back'); render(); return true; }
+        if (e.key.length === 1 && !e.ctrlKey && !e.altKey) { value += e.key; emit('char', e.key); render(); return true; }
         if (e.ctrlKey && e.key.toLowerCase() === 'v') {
           navigator.clipboard.readText().then((t) => { value += t; render(); }).catch(() => {});
           return true;
@@ -122,5 +151,5 @@ const OSK = (() => {
     });
   }
 
-  return { prompt };
+  return { prompt, moveBy, get open() { return !el('osk').classList.contains('hidden'); } };
 })();

@@ -118,17 +118,14 @@ const StreamClient = (() => {
     if (document.pointerLockElement) document.exitPointerLock();
     document.body.classList.add('stream-menu');
     Nav.suspend(false);
-    const statsEl = ui.querySelector('#stream-stats');
     const v = await modal({
-      title: 'Stream',
-      body: rate.kbps ? `Most: ${rate.fps} fps · ${(rate.kbps / 1000).toFixed(1)} Mbps (automatikus, min. 30 fps)` : '',
+      title: game ? game.name : 'Stream',
       items: [
-        { label: '▶  Folytatás', value: null, kind: 'primary' },
-        { label: mouseMode ? '🎮  Kontroller mód (a játék kapja a kontrollert)' : '🖱  Egér mód (kontrollerrel egér és billentyűzet)', value: 'mouse' },
-        { label: '⏏  Vissza a InariXbe (a játék fut tovább a gépen)', value: 'exit' },
-        ...(game ? [{ label: `⏹  Kilépés a játékból (${game.name})`, value: 'quit', kind: 'danger' }] : []),
-        { label: statsEl && statsEl.classList.contains('hidden') ? '📊  Statisztika mutatása' : '📊  Statisztika elrejtése', value: 'stats' },
-        { label: '🖱  Egér rögzítése (játékokhoz)', value: 'lock' },
+        { icon: 'play', label: 'Folytatás', value: null, kind: 'primary' },
+        { icon: mouseMode ? 'gamepad' : 'desktop', label: mouseMode ? 'Kontroller mód' : 'Egér mód', value: 'mouse' },
+        { icon: 'news', label: 'Billentyűzet', value: 'kbd' },
+        { icon: 'toDesktop', label: 'Vissza az InariX-be', value: 'exit' },
+        ...(game ? [{ icon: 'close', label: 'Kilépés a játékból', value: 'quit', kind: 'danger' }] : []),
       ],
     });
     document.body.classList.remove('stream-menu');
@@ -148,8 +145,7 @@ const StreamClient = (() => {
       quitGameFlow(e, g.hostId, { confirm: false });
     }
     else if (v === 'mouse') { mousePicked = true; setMouseMode(!mouseMode); }
-    else if (v === 'stats' && statsEl) statsEl.classList.toggle('hidden');
-    else if (v === 'lock' && canvas) canvas.requestPointerLock();
+    else if (v === 'kbd') typeText();
   }
 
   function setMouseMode(on) {
@@ -157,7 +153,8 @@ const StreamClient = (() => {
     // a virtuális kontroller állapotát nullázzuk, hogy ne maradjon lenyomva semmi
     for (const i of pads.keys()) sendRel({ t: 'px', i });
     pads.clear(); mm.held = {};
-    toast(mouseMode ? 'Egér mód: bal kar = egér · Ⓐ bal / Ⓑ jobb klikk · jobb kar = görgetés · Ⓧ = gépelés · Select+Start = menü' : 'Kontroller mód: a játék kapja a kontrollert', 'ok', 5000);
+    mouseHints();
+    if (!mouseMode) toast('Kontroller mód: a játék kapja a kontrollert', 'ok', 3000);
   }
 
   // Egér mód: egy kontroller állapotából egér/billentyű események
@@ -182,14 +179,31 @@ const StreamClient = (() => {
     for (const [k, code] of Object.entries(MM_KEYS)) edge(Number(k), (d) => sendRel({ t: 'k', c: code, d: d ? 1 : 0 }));
     edge(2, (d) => { if (d) typeText(); });
   }
+  // Gombjelző sáv egér módban (alul, átlátszó)
+  function mouseHints() {
+    if (!ui) return;
+    let el = ui.querySelector('#stream-hints');
+    if (!el) { el = document.createElement('div'); el.id = 'stream-hints'; ui.append(el); }
+    const H = (cls, k, t) => { const sp = document.createElement('span'); sp.className = 'hint'; const b = document.createElement('b'); b.className = cls; b.textContent = k; sp.append(b, t); return sp; };
+    el.replaceChildren(H('btn-start', 'L', 'Egér'), H('btn-a', 'A', 'Bal klikk'), H('btn-b', 'B', 'Jobb klikk'), H('btn-start', 'R', 'Görgetés'), H('btn-x', 'X', 'Billentyűzet'),
+      H('btn-y', 'Y', 'Enter'), H('btn-start', 'LB', 'Esc'), H('btn-start', 'LT', 'Törlés'), H('btn-start', '✚', 'Nyilak'), H('btn-start', 'Select+Start', 'Menü'));
+    el.classList.toggle('show', !!mouseMode && !(OSK.open && mm.typing));
+  }
+  // Billentyűzet: az InariX saját, lebegő billentyűzete – minden leütés azonnal a gépre megy; a jobb karral / egérrel mozgatható
   async function typeText() {
     if (mm.typing) return;
     mm.typing = true; menuOpen = true;
-    Nav.suspend(false); document.body.classList.add('stream-menu');
-    const t = await OSK.prompt({ title: 'Gépelés a gépre (≡ = küldés)' });
-    document.body.classList.remove('stream-menu');
+    Nav.suspend(false); document.body.classList.add('stream-kbd');
+    mouseHints();
+    const live = (kind, ch) => {
+      if (kind === 'char') sendRel({ t: 'text', s: ch });
+      else if (kind === 'back') { sendRel({ t: 'k', c: 'Backspace', d: 1 }); sendRel({ t: 'k', c: 'Backspace', d: 0 }); }
+      else if (kind === 'enter') { sendRel({ t: 'k', c: 'Enter', d: 1 }); sendRel({ t: 'k', c: 'Enter', d: 0 }); }
+    };
+    await OSK.prompt({ title: 'Billentyűzet – a leütések azonnal a gépre mennek', live });
+    document.body.classList.remove('stream-kbd');
     Nav.suspend(true); menuOpen = false; waitRelease = true; mm.held = {}; mm.typing = false;
-    if (t) sendRel({ t: 'text', s: t });
+    mouseHints();
   }
 
   function showBar() {
@@ -233,6 +247,11 @@ const StreamClient = (() => {
 
     // Kontrollerek: ~250 Hz lekérdezés, változáskor + 100 ms-onként küldés
     padTimer = setInterval(() => {
+      if (mm.typing && OSK.open) {
+        const p = [...(navigator.getGamepads ? navigator.getGamepads() : [])].find((x) => x && x.connected);
+        if (p) { const dz = (v) => (Math.abs(v) < 0.2 ? 0 : v); const dx = dz(p.axes[2] || 0), dy = dz(p.axes[3] || 0); if (dx || dy) OSK.moveBy(dx * 14, dy * 14); }
+        return;
+      }
       if (menuOpen) return; // a menü alatt a kontroller a InariXet vezérli, nem a gépet
       const list = navigator.getGamepads ? navigator.getGamepads() : [];
       const seen = new Set();
@@ -335,6 +354,7 @@ const StreamClient = (() => {
     needKey = true; vconf = null; frames.clear();
     if (!opts.preview) Nav.suspend(true);
     buildUi();
+    mouseHints(); // egér módban a gombjelző sáv
     // Helyi teszt: kis előnézet a sarokban (különben a saját képernyő önmagát rögzítené → fekete "tükörfolyosó")
     if (opts.preview) ui.classList.add('preview');
     const audioEl = ui.querySelector('#stream-audio');

@@ -185,6 +185,11 @@ class StreamHost {
           || allowed.find((x) => !T.baseline.has(x.h)) // a legfelső új ablak
           || null;
         let state = target ? (inDir(target) ? 'game' : 'launcher') : 'wait';
+        // ha valami más (pl. egy korábban nyitott Discord) van előtérben, a látható ablakot előre hozzuk
+        if (target && w.fg !== target.h && !allowed.some((x) => x.h === w.fg) && Date.now() - (T.fgAt || 0) > 1500) {
+          T.fgAt = Date.now();
+          this.send(`FG ${target.h}`);
+        }
         if (target && target.h !== T.last) { T.last = target.h; this.log(`[stream] látható ablak: ${path.basename(target.exe)}${target.company ? ` (${target.company})` : ''}`); }
         let mask;
         if (T.ms || (!target && Date.now() - T.start > 180000)) { mask = null; if (!target) state = 'full'; }
@@ -196,6 +201,13 @@ class StreamHost {
           const r = Math.min(w.sw, Math.max(...grp.map((g) => g.r))), b = Math.min(w.sh, Math.max(...grp.map((g) => g.b)));
           mask = (r - x) * (b - y) >= w.sw * w.sh * 0.97 ? null : { x: x / w.sw, y: y / w.sh, w: Math.max(0, r - x) / w.sw, h: Math.max(0, b - y) / w.sh };
         }
+        // az egér a látható ablakon belül marad (a Windows feloldja ablakváltáskor, ezért minden körben újra beállítjuk)
+        if (target && mask) {
+          const grp = allowed.filter((x) => x.pid === target.pid);
+          const l = Math.max(0, Math.min(...grp.map((g) => g.l))), t = Math.max(0, Math.min(...grp.map((g) => g.t)));
+          const r = Math.min(w.sw, Math.max(...grp.map((g) => g.r))), b = Math.min(w.sh, Math.max(...grp.map((g) => g.b)));
+          this.send(`CLIP ${l} ${t} ${r} ${b}`); T.clipped = true;
+        } else if (T.clipped) { this.send('CLIP'); T.clipped = false; }
         const key = JSON.stringify(mask);
         if (key !== T.maskKey) { T.maskKey = key; if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:mask', mask); }
         if (state !== T.state) { T.state = state; if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:gstate', { phase: state, name: game.name }); }
@@ -205,7 +217,7 @@ class StreamHost {
     tick();
   }
   stopTracker(clear = true) {
-    if (this.tracker) { clearTimeout(this.tracker.timer); this.tracker = null; }
+    if (this.tracker) { clearTimeout(this.tracker.timer); if (this.tracker.clipped) this.send('CLIP'); this.tracker = null; }
     if (clear && this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:mask', null);
   }
   endGame(reason) {

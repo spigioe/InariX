@@ -894,3 +894,15 @@ body[data-tile-in="none"] .tile .art-layer { transition: none; transform: none; 
 /* játék stream: felirat, amíg a játék ablaka meg nem jelenik */
 #stream-gstate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 1em 1.8em; border-radius: 999px; background: rgba(10, 12, 18, .82); color: #fff; font-weight: 700; font-size: 1.1em; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 5; }
 #stream-gstate.show { opacity: 1; }
+/* stream: lebegő billentyűzet (nincs elsötétítés, a játék látszik; a panel mozgatható) */
+#osk.float { background: transparent; pointer-events: none; padding-bottom: 2vh; }
+#osk.float #osk-panel { pointer-events: auto; width: min(920px, 92vw); border-radius: 1.2em; box-shadow: 0 20px 70px rgba(0, 0, 0, .65); background: color-mix(in srgb, var(--panel-solid) 94%, transparent); animation: none; }
+#osk.float #osk-title { cursor: move; user-select: none; }
+#osk.float #osk-field { font-size: 1.1em; min-height: 1.8em; margin-bottom: .7em; }
+/* stream: gombjelző sáv egér módban */
+#stream-hints { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 1.1em; padding: 22px 2vw 12px;
+  background: linear-gradient(to top, rgba(0, 0, 0, .78), transparent); color: #f4f4f5; font: 600 14px "Segoe UI", sans-serif; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 4; text-shadow: 0 1px 4px rgba(0, 0, 0, .8); }
+#stream-hints.show { opacity: 1; }
+#stream-hints .hint b { font-size: .8em; }
+#stream-hints .hint b.btn-start { width: auto; min-width: 1.7em; padding: 0 .5em; border-radius: .5em; background: #3f3f46; }
+body.stream-menu #osk, body.stream-kbd #osk { z-index: 320; }

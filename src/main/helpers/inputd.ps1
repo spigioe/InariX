@@ -12,6 +12,8 @@
 #   PX i          kontroller leválasztása
 #   WINS [mappa]  látható felső szintű ablakok (fizikai pixelben, gyártóval) + hány folyamat fut a mappából
 #   COMP mappa    a mappa (és almappái, 2 szint) .exe fájljainak gyártói
+#   FG hwnd       az ablak előtérbe hozása
+#   CLIP l t r b  az egérkurzor korlátozása a téglalapra (fizikai pixel) · CLIP  feloldás
 #   PING | VIGEM | EXIT
 # Kimenet: READY vigem=0|1 · PONG · VIGEM ok|hiba · ERROR ...
 $ErrorActionPreference = 'Stop'
@@ -284,6 +286,39 @@ namespace InariX {
       } catch { }
       return "COMP " + string.Join("|", set);
     }
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("user32.dll")] static extern bool BringWindowToTop(IntPtr h);
+    [DllImport("user32.dll")] static extern void SwitchToThisWindow(IntPtr h, bool altTab);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int cmd);
+    [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
+    [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+    [DllImport("user32.dll")] static extern bool ClipCursor(ref RECT r);
+    [DllImport("user32.dll", EntryPoint = "ClipCursor")] static extern bool ClipCursorNull(IntPtr r);
+    // Előtérbe hozás háttérfolyamatból: a Windows ezt alapból tiltja – ALT leütés + a két szál bemenetének összekapcsolása
+    public static bool Front(long hv) {
+      IntPtr h = new IntPtr(hv);
+      if (IsIconic(h)) ShowWindow(h, 9); // SW_RESTORE
+      IntPtr fg = GetForegroundWindow();
+      int pid;
+      uint fgThread = GetWindowThreadProcessId(fg, out pid), me = GetCurrentThreadId();
+      keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero);
+      bool att = fgThread != 0 && fgThread != me && AttachThreadInput(me, fgThread, true);
+      BringWindowToTop(h);
+      bool ok = SetForegroundWindow(h);
+      if (att) AttachThreadInput(me, fgThread, false);
+      if (GetForegroundWindow() != h) {
+        // tartalék: ideiglenesen legfelülre, majd vissza (z-sorrend), és az Alt+Tab-szerű váltás
+        SetWindowPos(h, new IntPtr(-1), 0, 0, 0, 0, 0x0003 | 0x0040); // HWND_TOPMOST, NOMOVE|NOSIZE|SHOWWINDOW
+        SetWindowPos(h, new IntPtr(-2), 0, 0, 0, 0, 0x0003 | 0x0040); // HWND_NOTOPMOST
+        SwitchToThisWindow(h, true);
+        ok = GetForegroundWindow() == h;
+      }
+      return ok;
+    }
+    public static void Clip(int l, int t, int r, int b) { var rc = new RECT { l = l, t = t, r = r, b = b }; ClipCursor(ref rc); }
+    public static void Unclip() { ClipCursorNull(IntPtr.Zero); }
     public static string Run(string dir) {
       var sb = new System.Text.StringBuilder();
       sb.Append("WINS ").Append(GetSystemMetrics(0)).Append(' ').Append(GetSystemMetrics(1)).Append(' ').Append(GetForegroundWindow().ToInt64());
@@ -336,6 +371,8 @@ namespace InariX {
             case "PING": lock (Vigem.OutLock) { Console.WriteLine("PONG"); Console.Out.Flush(); } break;
             case "GP": { int r = Input.GpuPriority(int.Parse(p[1]), int.Parse(p[2])); if (r != 0 && p[2] == "5") r = Input.GpuPriority(int.Parse(p[1]), 4); Console.WriteLine("GP " + p[1] + " " + r); Console.Out.Flush(); break; }
             case "DEBUG": Vigem.Debug = true; break;
+            case "FG": Wins.Front(long.Parse(p[1])); break;
+            case "CLIP": if (p.Length >= 5) Wins.Clip(int.Parse(p[1]), int.Parse(p[2]), int.Parse(p[3]), int.Parse(p[4])); else Wins.Unclip(); break;
             case "COMP": { string r = Wins.Companies(line.Substring(4).Trim()); lock (Vigem.OutLock) { Console.WriteLine(r); Console.Out.Flush(); } break; }
             case "WINS": { string r = Wins.Run(line.Length > 5 ? line.Substring(5).Trim() : ""); lock (Vigem.OutLock) { Console.WriteLine(r); Console.Out.Flush(); } break; }
             case "VIGEM": Console.WriteLine("VIGEM " + (Vigem.Plug(99) ? "ok" : "hiba " + Vigem.LastError)); Vigem.Unplug(99); Console.Out.Flush(); break;
