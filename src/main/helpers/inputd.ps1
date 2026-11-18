@@ -10,7 +10,8 @@
 #   U cp          Unicode karakter (UTF-16 kódegység) leütése
 #   P i btn lt rt lx ly rx ry   kontroller állapot (XUSB formátum)
 #   PX i          kontroller leválasztása
-#   WINS [mappa]  látható felső szintű ablakok (fizikai pixelben) + hány folyamat fut a mappából
+#   WINS [mappa]  látható felső szintű ablakok (fizikai pixelben, gyártóval) + hány folyamat fut a mappából
+#   COMP mappa    a mappa (és almappái, 2 szint) .exe fájljainak gyártói
 #   PING | VIGEM | EXIT
 # Kimenet: READY vigem=0|1 · PONG · VIGEM ok|hiba · ERROR ...
 $ErrorActionPreference = 'Stop'
@@ -258,6 +259,31 @@ namespace InariX {
       exeCache[pid] = e;
       return e;
     }
+    static Dictionary<string, string> compCache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    public static string Company(string exe) {
+      if (string.IsNullOrEmpty(exe)) return "";
+      string c;
+      if (compCache.TryGetValue(exe, out c)) return c;
+      c = "";
+      try { var vi = System.Diagnostics.FileVersionInfo.GetVersionInfo(exe); c = (vi.CompanyName ?? "").Trim(); } catch { }
+      c = c.Replace("|", " ").Replace("\t", " ");
+      compCache[exe] = c;
+      return c;
+    }
+    public static string Companies(string dir) {
+      var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+      try {
+        var stack = new Stack<KeyValuePair<string, int>>();
+        stack.Push(new KeyValuePair<string, int>(dir, 0));
+        int n = 0;
+        while (stack.Count > 0 && n < 80) {
+          var cur = stack.Pop();
+          foreach (var f in System.IO.Directory.GetFiles(cur.Key, "*.exe")) { n++; var c = Company(f); if (c.Length > 1) set.Add(c); }
+          if (cur.Value < 2) foreach (var d in System.IO.Directory.GetDirectories(cur.Key)) stack.Push(new KeyValuePair<string, int>(d, cur.Value + 1));
+        }
+      } catch { }
+      return "COMP " + string.Join("|", set);
+    }
     public static string Run(string dir) {
       var sb = new System.Text.StringBuilder();
       sb.Append("WINS ").Append(GetSystemMetrics(0)).Append(' ').Append(GetSystemMetrics(1)).Append(' ').Append(GetForegroundWindow().ToInt64());
@@ -273,13 +299,15 @@ namespace InariX {
         if (!IsWindowVisible(h) || IsIconic(h)) return true;
         int ex = GetWindowLong(h, -20);
         if ((ex & 0x80) != 0) return true; // WS_EX_TOOLWINDOW
+        if ((ex & 0x20) != 0) return true; // WS_EX_TRANSPARENT: átkattintható / átlátszó réteg (pl. indító splash)
         int cloaked; if (DwmGetWindowAttribute(h, 14, out cloaked, 4) == 0 && cloaked != 0) return true;
         RECT r; if (!GetWindowRect(h, out r)) return true;
         if (r.r - r.l < 120 || r.b - r.t < 80) return true;
         int pid; GetWindowThreadProcessId(h, out pid);
         int style = GetWindowLong(h, -16);
         int flags = ((style & 0x00C00000) == 0x00C00000 ? 1 : 0) | ((ex & 0x8) != 0 ? 2 : 0); // 1: keretes (címsor), 2: mindig felül
-        sb.Append(h.ToInt64()).Append('\t').Append(pid).Append('\t').Append(r.l).Append('\t').Append(r.t).Append('\t').Append(r.r).Append('\t').Append(r.b).Append('\t').Append(flags).Append('\t').Append(Exe(pid)).Append('|');
+        string exe = Exe(pid);
+        sb.Append(h.ToInt64()).Append('\t').Append(pid).Append('\t').Append(r.l).Append('\t').Append(r.t).Append('\t').Append(r.r).Append('\t').Append(r.b).Append('\t').Append(flags).Append('\t').Append(exe).Append('\t').Append(Company(exe)).Append('|');
         return true;
       }, IntPtr.Zero);
       return sb.ToString();
@@ -308,6 +336,7 @@ namespace InariX {
             case "PING": lock (Vigem.OutLock) { Console.WriteLine("PONG"); Console.Out.Flush(); } break;
             case "GP": { int r = Input.GpuPriority(int.Parse(p[1]), int.Parse(p[2])); if (r != 0 && p[2] == "5") r = Input.GpuPriority(int.Parse(p[1]), 4); Console.WriteLine("GP " + p[1] + " " + r); Console.Out.Flush(); break; }
             case "DEBUG": Vigem.Debug = true; break;
+            case "COMP": { string r = Wins.Companies(line.Substring(4).Trim()); lock (Vigem.OutLock) { Console.WriteLine(r); Console.Out.Flush(); } break; }
             case "WINS": { string r = Wins.Run(line.Length > 5 ? line.Substring(5).Trim() : ""); lock (Vigem.OutLock) { Console.WriteLine(r); Console.Out.Flush(); } break; }
             case "VIGEM": Console.WriteLine("VIGEM " + (Vigem.Plug(99) ? "ok" : "hiba " + Vigem.LastError)); Vigem.Unplug(99); Console.Out.Flush(); break;
             case "EXIT": Vigem.UnplugAll(); return;

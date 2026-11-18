@@ -28,7 +28,7 @@ const int = (v, min, max) => Math.max(min, Math.min(max, Math.round(Number(v) ||
 function parseWins(line) {
   const [head, ...rows] = line.trim().split('|').filter(Boolean);
   const [, sw, sh, fg, inDir] = head.split(' ');
-  const list = rows.map((r) => { const f = r.split('\t'); const l = +f[2], t = +f[3], rr = +f[4], b = +f[5]; return { h: f[0], pid: +f[1], l, t, r: rr, b, area: (rr - l) * (b - t), flags: +f[6], exe: f[7] || '' }; });
+  const list = rows.map((r) => { const f = r.split('\t'); const l = +f[2], t = +f[3], rr = +f[4], b = +f[5]; return { h: f[0], pid: +f[1], l, t, r: rr, b, area: (rr - l) * (b - t), flags: +f[6], exe: f[7] || '', company: f[8] || '' }; });
   return { sw: +sw || 1920, sh: +sh || 1080, fg: String(fg), inDir: +inDir || 0, list };
 }
 
@@ -91,6 +91,7 @@ class StreamHost {
       let i;
       while ((i = buf.indexOf('\n')) >= 0) {
         const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (line.startsWith('COMP')) { const w = this.compWait; this.compWait = null; if (w) w(line); continue; }
         if (line.startsWith('WINS ')) { const w = this.winsWait; this.winsWait = null; if (w) w(parseWins(line)); continue; }
         if (line.startsWith('RUMBLE')) {
           const [, i, l, s] = line.split(' ').map(Number);
@@ -126,19 +127,45 @@ class StreamHost {
     this.pending = { game, baseline: new Set(w ? w.list.map((x) => x.h) : []), at: Date.now() };
     this.log(`[stream] játékindítás előkészítve: ${game.name} (${this.pending.baseline.size} meglévő ablak)`);
   }
+  // .exe gyártók egy mappában (a játék kiadójának felismeréséhez)
+  companies(dir) {
+    this.ensureInput();
+    return new Promise((res) => {
+      const t = setTimeout(() => { this.compWait = null; res([]); }, 6000);
+      this.compWait = (line) => { clearTimeout(t); res(line.slice(5).split('|').map((x) => x.trim()).filter(Boolean)); };
+      this.send(`COMP ${dir}`);
+    });
+  }
   startTracker(gameInfo) {
-    this.stopTracker();
+    this.stopTracker(false);
+    if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:mask', { black: true }); // amíg nincs mit mutatni
     const pend = this.pending && this.pending.game && this.pending.game.id === gameInfo.id && Date.now() - this.pending.at < 120000 ? this.pending : null;
     const game = (pend && pend.game) || gameInfo.game;
     if (!game) return;
     const ms = game.store === 'msstore';
     const dir = path.resolve(game.store === 'custom' && game.launch && game.launch.exe ? path.dirname(game.launch.exe) : game.installDir || '').toLowerCase();
-    const T = { game, ms, dir, baseline: pend ? pend.baseline : null, phase: gameInfo.resume ? 'game' : 'first', first: null, seen: false, gone: 0, start: Date.now(), mask: undefined, state: '' };
+    const T = { game, ms, dir, baseline: pend ? pend.baseline : null, seen: false, gone: 0, start: Date.now(), last: null, state: '', pubs: [] };
     this.tracker = T;
     const self = path.dirname(process.execPath).toLowerCase();
-    const SYS = /\\(explorer|textinputhost|shellexperiencehost|searchhost|startmenuexperiencehost|lockapp|systemsettings|applicationframehost|searchapp|widgets|gamebar|gamebarftserver|xboxgamebarwidgets)\.exe$/i;
+    const SYS = /\\(explorer|textinputhost|shellexperiencehost|searchhost|startmenuexperiencehost|lockapp|systemsettings|searchapp|widgets|gamebar|gamebarftserver|xboxgamebarwidgets|code|devenv|chrome|msedge|firefox|discord|spotify|teams|ms-teams|outlook|slack|telegram|whatsapp|obs64|powershell|windowsterminal|conhost|cmd|notepad|taskmgr)\.exe$/i;
+    // a játékok indítói (ezek ablakai mindig átmehetnek: bejelentkezés, frissítés, indítási választó)
+    const LAUNCHER = /\\(steam|steamwebhelper|epicgameslauncher|eadesktop|eabackgroundservice|origin|ubisoftconnect|upc|uplay|uplaywebcore|battle\.net|agent|launcher|launcherpatcher|rockstarservice|socialclubhelper|playgtav|playrdr2|galaxyclient|gog galaxy|riotclientux|riotclientservices|bethesdanetlauncher|wargaminggamecenter|minecraftlauncher|xboxapp|gamingservices)\.exe$/i;
+    const LAUNCHER_DIR = /\\(steam|epic games\\launcher|electronic arts|ea games|origin|ubisoft|battle\.net|rockstar games|gog galaxy|riot games|bethesda\.net launcher)\\/i;
+    const GENERIC = /^(microsoft|nvidia|intel|advanced micro devices|amd|google|mozilla|oracle|python|the chromium authors|easy anti-cheat|epic games, inc\.? easy|battleye|realtek|valve)/i;
+    const norm = (c) => String(c || '').toLowerCase().replace(/[.,]/g, '').replace(/\b(inc|ltd|llc|gmbh|sa|s a|corporation|corp|co|limited|entertainment|games|studios?|interactive)\b/g, '').replace(/\s+/g, ' ').trim();
+    const pubMatch = (c) => { const n = norm(c); return !!n && n.length > 1 && T.pubs.some((p) => n === p || n.includes(p) || p.includes(n)); };
     const ignore = (x) => !x.exe || x.exe.toLowerCase().startsWith(self) || SYS.test(x.exe);
     const inDir = (x) => x.exe && x.exe.toLowerCase().startsWith(`${T.dir}\\`);
+    // a kiadó: a játék mappájának .exe gyártói + Steamnél az áruház kiadója / fejlesztője
+    if (!ms && T.dir) {
+      this.companies(T.dir).then((list) => { for (const c of list) if (!GENERIC.test(c)) T.pubs.push(norm(c)); this.log(`[stream] kiadó (exe): ${list.filter((c) => !GENERIC.test(c)).join(', ') || '–'}`); }).catch(() => {});
+    }
+    if (game.store === 'steam' && game.storeId) {
+      fetch(`https://store.steampowered.com/api/appdetails?appids=${encodeURIComponent(game.storeId)}&filters=basic`).then((r) => r.json()).then((j) => {
+        const d = j && j[game.storeId] && j[game.storeId].data;
+        for (const c of [...((d && d.publishers) || []), ...((d && d.developers) || [])]) if (c && !GENERIC.test(c)) T.pubs.push(norm(c));
+      }).catch(() => {});
+    }
     this.log(`[stream] játék stream: ${game.name} · ${ms ? 'MS Store – teljes képernyő' : `mappa: ${T.dir}`}${gameInfo.resume ? ' · folytatás' : ''}`);
     const tick = async () => {
       if (this.tracker !== T) return;
@@ -146,34 +173,30 @@ class StreamHost {
       if (this.tracker !== T) return;
       if (w) {
         if (!T.baseline) T.baseline = new Set(w.list.map((x) => x.h)); // nincs előzetes pillanatkép: a mostaniak a régiek
-        let target = null, state = 'wait';
         // kilépés: a játék mappájából már semmi sem fut (miután már futott)
+        if (w.inDir !== T.lastIn) { this.log(`[stream] a játék mappájából futó folyamatok: ${w.inDir}`); T.lastIn = w.inDir; }
         if (w.inDir > 0) { T.seen = true; T.gone = 0; } else if (T.seen) T.gone++;
         if (T.seen && T.gone >= 3) { this.endGame('A játék bezárult'); return; }
-        if (T.phase === 'first') {
-          if (!T.first) {
-            const fresh = w.list.filter((x) => !T.baseline.has(x.h) && !ignore(x));
-            const pick = fresh.find((x) => x.h === w.fg) || fresh.sort((a, b) => b.area - a.area)[0];
-            if (pick) { T.first = pick.h; this.log(`[stream] első ablak: ${path.basename(pick.exe)}`); }
-          }
-          const f = T.first && w.list.find((x) => x.h === T.first);
-          if (f) { target = f; state = inDir(f) ? 'game' : 'launcher'; }
-          else if (T.first) { T.phase = 'game'; this.log('[stream] az első ablak bezárult – a játék ablakát keresem'); }
-        }
-        if (T.phase === 'game' && !target) {
-          const g = w.list.filter((x) => inDir(x));
-          target = g.find((x) => x.h === w.fg) || g.sort((a, b) => b.area - a.area)[0] || null;
-          if (target) state = 'game';
-        }
-        // MS Store játék: nincs maszk (teljes képernyő); ha 3 perc alatt sincs mit mutatni: teljes képernyő (kezelhető legyen)
+        // átengedhető ablakok: a játék mappájából, a kiadótól, ismert indítóból, vagy az indítás óta nyílt
+        const allowed = w.list.filter((x) => !ignore(x) && (inDir(x) || pubMatch(x.company) || LAUNCHER.test(x.exe) || LAUNCHER_DIR.test(x.exe) || !T.baseline.has(x.h)));
+        let target = allowed.find((x) => x.h === w.fg) // ami előtérben van
+          || allowed.filter(inDir).sort((a, b) => b.area - a.area)[0] // a játék ablaka
+          || (T.last && allowed.find((x) => x.h === T.last)) // ami eddig látszott
+          || allowed.find((x) => !T.baseline.has(x.h)) // a legfelső új ablak
+          || null;
+        let state = target ? (inDir(target) ? 'game' : 'launcher') : 'wait';
+        if (target && target.h !== T.last) { T.last = target.h; this.log(`[stream] látható ablak: ${path.basename(target.exe)}${target.company ? ` (${target.company})` : ''}`); }
         let mask;
-        if (T.ms || (!target && Date.now() - T.start > 180000)) { mask = null; state = target ? state : 'full'; }
+        if (T.ms || (!target && Date.now() - T.start > 180000)) { mask = null; if (!target) state = 'full'; }
         else if (!target) mask = { black: true };
         else {
-          const x = Math.max(0, target.l), y = Math.max(0, target.t), r = Math.min(w.sw, target.r), b = Math.min(w.sh, target.b);
+          // a kiválasztott ablak + ugyanannak a programnak a többi (felugró) ablaka
+          const grp = allowed.filter((x) => x.pid === target.pid);
+          const x = Math.max(0, Math.min(...grp.map((g) => g.l))), y = Math.max(0, Math.min(...grp.map((g) => g.t)));
+          const r = Math.min(w.sw, Math.max(...grp.map((g) => g.r))), b = Math.min(w.sh, Math.max(...grp.map((g) => g.b)));
           mask = (r - x) * (b - y) >= w.sw * w.sh * 0.97 ? null : { x: x / w.sw, y: y / w.sh, w: Math.max(0, r - x) / w.sw, h: Math.max(0, b - y) / w.sh };
         }
-        const key = JSON.stringify(mask === undefined ? 'u' : mask);
+        const key = JSON.stringify(mask);
         if (key !== T.maskKey) { T.maskKey = key; if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:mask', mask); }
         if (state !== T.state) { T.state = state; if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:gstate', { phase: state, name: game.name }); }
       }
@@ -181,9 +204,9 @@ class StreamHost {
     };
     tick();
   }
-  stopTracker() {
+  stopTracker(clear = true) {
     if (this.tracker) { clearTimeout(this.tracker.timer); this.tracker = null; }
-    if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:mask', null);
+    if (clear && this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:mask', null);
   }
   endGame(reason) {
     this.log(`[stream] ${reason} – a stream bezárul`);
@@ -204,7 +227,7 @@ class StreamHost {
     this.boostPriority();
     await this.startUdp(opts.udpPort);
     const id = crypto.randomUUID();
-    const params = { id, sdp: opts.sdp, width: int(opts.width, 640, 3840) || 1920, height: int(opts.height, 360, 2160) || 1080, fps: int(opts.fps, 24, 144) || 60, bitrate: int(opts.bitrate, 2000, 150000) || 20000,
+    const params = { id, game: !!(opts.game && opts.game.id), sdp: opts.sdp, width: int(opts.width, 640, 3840) || 1920, height: int(opts.height, 360, 2160) || 1080, fps: int(opts.fps, 24, 144) || 60, bitrate: int(opts.bitrate, 2000, 150000) || 20000,
       codecs: Array.isArray(opts.codecs) ? opts.codecs.filter((c) => ['av1', 'hevc', 'h264'].includes(c)) : ['h264'], prefer: ['av1', 'hevc', 'h264'].includes(opts.prefer) ? opts.prefer : 'auto' };
     const answer = await new Promise((resolve, reject) => {
       const t = setTimeout(() => { this.waiters.delete(id); reject(new Error('A host nem válaszolt időben')); }, 20000);
@@ -216,7 +239,7 @@ class StreamHost {
     // játék stream: ablakkövetés (asztal módban nincs – ott mindig teljes képernyő)
     if (opts.game && opts.game.id && this.resolveGame) {
       this.resolveGame(String(opts.game.id)).then((g) => { if (this.active) this.startTracker({ id: String(opts.game.id), game: g, resume: !!opts.game.resume }); }).catch(() => {});
-    } else this.stopTracker();
+    } else this.stopTracker(!(opts.game && opts.game.id));
     this.log(`[stream] kapcsolat: ${client} · ${params.width}x${params.height}@${params.fps} · ${params.bitrate} kbps · UDP ${this.udp.port}`);
     const udpRef = this.udp;
     setTimeout(() => {

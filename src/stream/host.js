@@ -1,7 +1,7 @@
 'use strict';
 let rumbleTo = null, gstateTo = null, lastGstate = null;
 // játék stream maszk: csak a játék / launcher ablaka látszik (normalizált téglalap), black: semmi; null: teljes kép
-let mask = null, maskCanvas = null, maskCtx = null;
+let mask = null, maskCanvas = null, maskCtx = null, gameMode = false;
 if (window.streamHost && window.streamHost.onMask) window.streamHost.onMask((m) => { mask = m || null; });
 if (window.streamHost && window.streamHost.onGstate) window.streamHost.onGstate((d) => { lastGstate = d; if (gstateTo) gstateTo(d); });
 function maskFrame(frame) {
@@ -192,7 +192,9 @@ async function runVideo(track, rel, opts, my) {
   }
 }
 
-streamHost.onOffer(async ({ id, sdp, width, height, fps, bitrate, codecs, prefer }) => {
+streamHost.onOffer(async ({ id, sdp, width, height, fps, bitrate, codecs, prefer, game }) => {
+  gameMode = !!game;
+  mask = gameMode ? { black: true } : null; // játéknál az első pillanattól fekete (a követő ezt felülírja)
   try {
     cleanup();
     const my = session;
@@ -215,7 +217,7 @@ streamHost.onOffer(async ({ id, sdp, width, height, fps, bitrate, codecs, prefer
       if (ch.label === 'fast' || ch.label === 'rel') ch.onmessage = (m) => { if (typeof m.data === 'string' && !/"t":"(kf|fb)"/.test(m.data)) streamHost.input(m.data); };
       if (ch.label === 'rel') {
         relCh = ch;
-        mask = null; lastGstate = null;
+        lastGstate = null;
         const go = () => { if (!started && my === session) { started = true; runVideo(video, ch, { bitrate, fps, codecs, prefer }, my).catch((err) => streamHost.stats({ error: err.message })); } };
         if (ch.readyState === 'open') go(); else ch.onopen = go;
       }
