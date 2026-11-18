@@ -122,8 +122,7 @@ const StreamClient = (() => {
       title: game ? game.name : 'Stream',
       items: [
         { icon: 'play', label: 'Folytatás', value: null, kind: 'primary' },
-        { icon: mouseMode ? 'gamepad' : 'desktop', label: mouseMode ? 'Kontroller mód' : 'Egér mód', value: 'mouse' },
-        { icon: 'news', label: 'Billentyűzet', value: 'kbd' },
+        { icon: mouseMode ? 'gamepad' : 'desktop', label: mouseMode ? 'Kontroller mód' : 'Egér és billentyűzet mód (Ⓧ: billentyűzet)', value: 'mouse' },
         { icon: 'toDesktop', label: 'Vissza az InariX-be', value: 'exit' },
         ...(game ? [{ icon: 'close', label: 'Kilépés a játékból', value: 'quit', kind: 'danger' }] : []),
       ],
@@ -145,7 +144,6 @@ const StreamClient = (() => {
       quitGameFlow(e, g.hostId, { confirm: false });
     }
     else if (v === 'mouse') { mousePicked = true; setMouseMode(!mouseMode); }
-    else if (v === 'kbd') typeText();
   }
 
   function setMouseMode(on) {
@@ -383,7 +381,8 @@ const StreamClient = (() => {
         late = 0;
       }, 500);
       pc.ontrack = (e) => {
-        if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0;
+        // hang: kis puffer (60 ms) – nullánál a lejátszó minden apró akadást elhalkítással / nyújtással tölt ki (hangerő ingadozás)
+        if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = e.track.kind === 'audio' ? 60 : 0;
         audioEl.srcObject = new MediaStream([e.track]);
       };
       pc.onconnectionstatechange = () => {
@@ -393,6 +392,7 @@ const StreamClient = (() => {
         if (pc.connectionState === 'disconnected') discTimer = setTimeout(() => pc && pc.connectionState !== 'connected' && stop('a kapcsolat megszakadt', true), 5000);
       };
       const offer = await pc.createOffer();
+      offer.sdp = RTC.mungeOpus(offer.sdp); // a host ebből olvassa: sztereó, 192 kbps, DTX nélkül
       await pc.setLocalDescription(offer);
       await RTC.iceDone(pc);
       const codecs = await decodableCodecs();

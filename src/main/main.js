@@ -164,7 +164,8 @@ function reportUpdateResult() {
   let mine = null;
   try { mine = JSON.parse(fs.readFileSync(path.join(path.dirname(process.execPath), 'build.json'), 'utf8')).build; } catch { /* dev */ }
   cfg.update({ pendingUpdate: null });
-  sendUI('update-result', { ok: mine === pu.build, build: pu.build, current: mine, log: updateLog() });
+  const want = (String(pu.build).match(/\((\w+)\)\s*$/) || [null, String(pu.build)])[1];
+  sendUI('update-result', { ok: !!mine && (mine === want || mine === pu.build), build: pu.build, current: mine, log: updateLog() });
 }
 const streamEngine = () => (cfg.get().stream.engine || 'builtin');
 function getStreamHost() {

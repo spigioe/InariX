@@ -143,7 +143,10 @@ function gameProcesses(game, procs) {
   if (!game) return [];
   if (game.store === 'custom' && game.launch && game.launch.exe) {
     const exe = normDir(game.launch.exe);
-    return procs.filter((p) => normDir(p.exe) === exe);
+    const dir = exe.replace(/\\[^\\]+$/, '');
+    // közös rendszermappában (Windows, Program Files gyökere, Asztal…) csak maga az .exe számít
+    const shared = dir.length < 8 || /^[a-z]:(\\(windows|program files( \(x86\))?|programdata|users\\[^\\]+(\\(desktop|downloads|documents))?))?(\\system32|\\syswow64)?$/.test(dir);
+    return procs.filter((p) => (shared ? normDir(p.exe) === exe : normDir(p.exe).startsWith(`${dir}\\`)));
   }
   const dir = normDir(game.installDir);
   if (dir.length < 8 || /^[a-z]:\\?$/.test(dir)) return []; // biztonság: meghajtó gyökér vagy túl rövid útvonal soha

@@ -21,6 +21,18 @@ const RTC = {
     return [...codecs].sort((a, b) => rank(a) - rank(b));
   },
 
+  // Opus: sztereó, 192 kbps, csendszűrés (DTX) nélkül – a játék hangja ne halkuljon / ugráljon
+  mungeOpus(sdp) {
+    const m = sdp.match(/a=rtpmap:(\d+) opus\/48000/i);
+    if (!m) return sdp;
+    const pt = m[1];
+    return sdp.split('\r\n').map((l) => {
+      if (!l.startsWith(`a=fmtp:${pt} `)) return l;
+      const keep = l.slice(`a=fmtp:${pt} `.length).split(';').filter((x) => x && !/^(stereo|sprop-stereo|maxaveragebitrate|usedtx|cbr)=/.test(x));
+      return `a=fmtp:${pt} ${[...keep, 'stereo=1', 'sprop-stereo=1', 'maxaveragebitrate=192000', 'usedtx=0'].join(';')}`;
+    }).join('\r\n');
+  },
+
   // Bitráta beállítása az SDP-ben (Chromium x-google paraméterek + b=AS). A küldő a fogadó leírásából olvassa.
   mungeBitrate(sdp, kbps) {
     const lines = sdp.split('\r\n');

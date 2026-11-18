@@ -106,6 +106,25 @@ class StreamHost {
     p.on('exit', () => { if (this.inputd === p) this.inputd = null; });
   }
 
+  // Windows „kommunikációs” elhalkítás: a kliens mikrofonjának lejátszásakor a játék hangját halkítaná (és ezt rögzítenénk).
+  // Stream alatt kikapcsoljuk (HKCU, nincs szükség rendszergazdára), utána az eredeti érték visszaáll.
+  noDucking(on) {
+    const { execFile } = require('child_process');
+    const KEY = 'HKCU\\Software\\Microsoft\\Multimedia\\Audio';
+    if (on) {
+      if (this.duckPrev !== undefined) return;
+      execFile('reg', ['query', KEY, '/v', 'UserDuckingPreference'], { windowsHide: true }, (err, out) => {
+        const m = !err && /UserDuckingPreference\s+REG_DWORD\s+0x([0-9a-f]+)/i.exec(String(out));
+        this.duckPrev = m ? parseInt(m[1], 16) : null;
+        execFile('reg', ['add', KEY, '/v', 'UserDuckingPreference', '/t', 'REG_DWORD', '/d', '3', '/f'], { windowsHide: true }, () => {});
+      });
+    } else if (this.duckPrev !== undefined) {
+      const prev = this.duckPrev; this.duckPrev = undefined;
+      if (prev === null) execFile('reg', ['delete', KEY, '/v', 'UserDuckingPreference', '/f'], { windowsHide: true }, () => {});
+      else execFile('reg', ['add', KEY, '/v', 'UserDuckingPreference', '/t', 'REG_DWORD', '/d', String(prev), '/f'], { windowsHide: true }, () => {});
+    }
+  }
+
   send(cmd) { if (this.inputd && this.inputd.stdin.writable) this.inputd.stdin.write(`${cmd}\n`); }
 
   // ---------- Játék-stream: csak a játék (vagy a launchere) ablaka látszik, a többi fekete ----------
@@ -248,6 +267,7 @@ class StreamHost {
     });
     if (answer.error) throw new Error(answer.error);
     this.active = { client, since: Date.now(), stats: null };
+    this.noDucking(true);
     // játék stream: ablakkövetés (asztal módban nincs – ott mindig teljes képernyő)
     if (opts.game && opts.game.id && this.resolveGame) {
       this.resolveGame(String(opts.game.id)).then((g) => { if (this.active) this.startTracker({ id: String(opts.game.id), game: g, resume: !!opts.game.resume }); }).catch(() => {});
@@ -315,6 +335,7 @@ class StreamHost {
   }
 
   stop(reason = 'leállítva') {
+    this.noDucking(false);
     this.stopTracker();
     if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:stop');
     this.stopUdp();

@@ -200,7 +200,8 @@ streamHost.onOffer(async ({ id, sdp, width, height, fps, bitrate, codecs, prefer
     const my = session;
     media = await navigator.mediaDevices.getDisplayMedia({
       video: { width: { max: width }, height: { max: height }, frameRate: { ideal: fps, max: fps } },
-      audio: true,
+      // a rendszerhang feldolgozás nélkül (nincs automatikus hangerő / zajszűrés), sztereóban
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2, sampleRate: 48000 },
     });
     const video = media.getVideoTracks()[0];
     const audio = media.getAudioTracks()[0] || null;
@@ -244,7 +245,13 @@ streamHost.onOffer(async ({ id, sdp, width, height, fps, bitrate, codecs, prefer
     await pc.setRemoteDescription({ type: 'offer', sdp });
     for (const t of pc.getTransceivers()) {
       const kind = t.receiver.track.kind;
-      if (kind === 'audio') { t.direction = audio ? 'sendrecv' : 'recvonly'; if (audio) await t.sender.replaceTrack(audio); } else t.direction = 'inactive';
+      if (kind === 'audio') {
+        t.direction = audio ? 'sendrecv' : 'recvonly';
+        if (audio) {
+          await t.sender.replaceTrack(audio);
+          try { const pr = t.sender.getParameters(); if (!pr.encodings || !pr.encodings.length) pr.encodings = [{}]; pr.encodings[0].maxBitrate = 192000; pr.encodings[0].priority = 'high'; pr.encodings[0].networkPriority = 'high'; await t.sender.setParameters(pr); } catch { /* */ }
+        }
+      } else t.direction = 'inactive';
     }
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
