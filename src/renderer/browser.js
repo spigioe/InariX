@@ -643,13 +643,29 @@ const Browser = (() => {
     } catch { /* */ }
   }
 
-  async function typeText() {
-    // a képernyő-billentyűzet a konzol felületén jelenik meg, a szöveget a weboldal fókuszált mezőjébe szúrjuk be
+  async function typeText(field) {
+    // a képernyő-billentyűzet a konzol felületén jelenik meg; a szöveg a weboldal fókuszált mezőjébe kerül
+    // (szövegmezőnél a mező jelenlegi tartalmával nyílik, és a kész szöveg lecseréli)
     const wv = B.wv;
     leavePage({ focus: false });
-    const t = await OSK.prompt({ title: 'Gépelés az oldalra (≡ = kész)' });
+    const t = await OSK.prompt({ title: field && field.label ? field.label : 'Gépelés az oldalra (≡ = kész)', value: field ? field.value : '', password: !!(field && field.password), numeric: !!(field && field.numeric) });
     enterPage();
-    if (t && wv) { try { wv.focus(); await wv.insertText(t); } catch { /* */ } }
+    if (t === null || !wv) return;
+    try {
+      wv.focus();
+      if (field) await wv.executeJavaScript('window.__inxSelectField && window.__inxSelectField()', true);
+      if (t || field) await wv.insertText(t);
+      // szövegmezőben a kész szöveg után az Enter elküldi (pl. keresés)
+      if (field && t) setTimeout(() => sendKey('Enter'), 60);
+    } catch { /* */ }
+  }
+  // Ⓐ: ha a D-paddal kijelölt elemen állunk (a kurzor rejtve), azt aktiválja – szövegmezőn a képernyő-billentyűzet nyílik
+  async function activateFocused() {
+    if (!B.wv || !B.ready) return false;
+    const r = await B.wv.executeJavaScript('window.__inxActivate ? window.__inxActivate() : null', true).catch(() => null);
+    if (!r || r.kind === 'none') return false;
+    if (r.kind === 'edit') typeText(r);
+    return true;
   }
 
   const BTN_REPEAT = new Set([12, 13, 14, 15]);
@@ -703,12 +719,14 @@ const Browser = (() => {
     if (B.app && B.app.map && i >= 12 && i <= 15) { const st = 160; mapCmd('pan', i === 14 ? -st : i === 15 ? st : 0, i === 12 ? -st : i === 13 ? st : 0); return; }
     if (B.app && i === 1 && !B.fullscreen && !(B.wv && B.ready && B.wv.canGoBack())) { confirmExit(); return; }
     switch (i) {
-      case 0: B.curVisible = true; placeCursor(); sendMouse('mouseDown'); break;
+      case 0:
+        if (!B.curVisible && B.app && !B.app.map) { activateFocused().then((ok) => { if (!ok) { B.curVisible = true; placeCursor(); sendMouse('mouseDown'); sendMouse('mouseUp'); } }); break; }
+        B.curVisible = true; placeCursor(); sendMouse('mouseDown'); break;
       case 1:
         if (B.fullscreen) { exitFullscreen(); break; }
         if (!back()) { Sound.back(); leavePage(); }
         break;
-      case 2: typeText(); break;
+      case 2: (B.app ? B.wv.executeJavaScript('(()=>{const e=document.activeElement; return e && (e.isContentEditable || /^(INPUT|TEXTAREA)$/.test(e.tagName)) ? { value: e.isContentEditable ? e.innerText.replace(/\\n$/, "") : e.value || "", label: e.getAttribute("aria-label") || e.getAttribute("placeholder") || "" } : null })()', true).catch(() => null) : Promise.resolve(null)).then((f) => typeText(f)); break;
       case 3: promptAddress(); break;
       case 4: back(); break;
       case 5: forward(); break;
@@ -718,10 +736,10 @@ const Browser = (() => {
       case 9: if (B.fullscreen) { showFsBar(true); break; } leavePage(); menu(); break;
       case 10: B.curVisible = !B.curVisible; placeCursor(); break; // bal kar lenyomás: kurzor elrejtése (pl. videónézéshez)
       case 11: sendKey('Enter'); break;
-      case 12: sendKey('Up'); break;
-      case 13: sendKey('Down'); break;
-      case 14: sendKey('Left'); break;
-      case 15: sendKey('Right'); break;
+      case 12: if (B.curVisible) { B.curVisible = false; placeCursor(); } sendKey('Up'); break;
+      case 13: if (B.curVisible) { B.curVisible = false; placeCursor(); } sendKey('Down'); break;
+      case 14: if (B.curVisible) { B.curVisible = false; placeCursor(); } sendKey('Left'); break;
+      case 15: if (B.curVisible) { B.curVisible = false; placeCursor(); } sendKey('Right'); break;
       default: break;
     }
   }

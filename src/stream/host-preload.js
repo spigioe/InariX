@@ -11,4 +11,7 @@ contextBridge.exposeInMainWorld('streamHost', {
   frame: (key, ts, buf) => ipcRenderer.send('stream-host:frame', key, ts, buf),
   onKeyReq: (fn) => ipcRenderer.on('stream-host:keyreq', () => fn()),
   onNet: (fn) => ipcRenderer.on('stream-host:net', (_e, d) => fn(d)),
+  onRumble: (fn) => ipcRenderer.on('stream-host:rumble', (_e, d) => fn(d)),
+  onMask: (fn) => ipcRenderer.on('stream-host:mask', (_e, d) => fn(d)),
+  onGstate: (fn) => ipcRenderer.on('stream-host:gstate', (_e, d) => fn(d)),
 });

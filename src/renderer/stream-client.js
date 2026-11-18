@@ -20,6 +20,31 @@ const StreamClient = (() => {
   const XB = { A: 0x1000, B: 0x2000, X: 0x4000, Y: 0x8000, LB: 0x0100, RB: 0x0200, BACK: 0x0020, START: 0x0010, LS: 0x0040, RS: 0x0080, UP: 0x0001, DOWN: 0x0002, LEFT: 0x0004, RIGHT: 0x0008, GUIDE: 0x0400 };
   const MAP = [XB.A, XB.B, XB.X, XB.Y, XB.LB, XB.RB, 0, 0, XB.BACK, XB.START, XB.LS, XB.RS, XB.UP, XB.DOWN, XB.LEFT, XB.RIGHT, XB.GUIDE];
 
+  // A játék rezgése: a Gamepad API hatása időkorlátos, ezért amíg a motor megy, 1,5 mp-enként megújítjuk
+  const rumbleState = new Map();
+  function padRumble(i, l, s) {
+    const prev = rumbleState.get(i);
+    if (prev) clearInterval(prev.timer);
+    const pad = () => (navigator.getGamepads ? navigator.getGamepads()[i] : null);
+    const p = pad();
+    const act = p && p.vibrationActuator;
+    if (!act) return;
+    if (!l && !s) { rumbleState.delete(i); act.reset ? act.reset().catch(() => {}) : act.playEffect('dual-rumble', { duration: 1, strongMagnitude: 0, weakMagnitude: 0 }).catch(() => {}); return; }
+    const play = () => { const q = pad(); if (q && q.vibrationActuator) q.vibrationActuator.playEffect('dual-rumble', { startDelay: 0, duration: 2000, strongMagnitude: l / 255, weakMagnitude: s / 255 }).catch(() => {}); };
+    play();
+    rumbleState.set(i, { timer: setInterval(play, 1500) });
+  }
+  const stopRumble = () => { for (const [i, r] of rumbleState) { clearInterval(r.timer); const p = navigator.getGamepads ? navigator.getGamepads()[i] : null; if (p && p.vibrationActuator && p.vibrationActuator.reset) p.vibrationActuator.reset().catch(() => {}); } rumbleState.clear(); };
+  // játék stream állapot: amíg nincs mit mutatni (fekete kép), felirat; ha a játék bezárult, a stream is
+  function gameState(m) {
+    if (!ui) return;
+    let el = ui.querySelector('#stream-gstate');
+    if (!el) { el = document.createElement('div'); el.id = 'stream-gstate'; ui.append(el); }
+    const txt = { wait: `${m.name || 'A játék'} indul… várakozás az ablakára`, launcher: '', game: '', full: '', ended: m.reason || 'A játék bezárult' }[m.phase] ?? '';
+    el.textContent = txt;
+    el.classList.toggle('show', !!txt);
+    if (m.phase === 'ended') setTimeout(() => stop(m.reason || 'A játék bezárult'), 1200);
+  }
   const sendFast = (m) => { if (fast && fast.readyState === 'open') fast.send(JSON.stringify(m)); };
   const sendRel = (m) => { if (rel && rel.readyState === 'open') rel.send(JSON.stringify(m)); };
   const on = (el, ev, fn, opt) => { el.addEventListener(ev, fn, opt); listeners.push([el, ev, fn, opt]); };
@@ -329,6 +354,8 @@ const StreamClient = (() => {
         let msg; try { msg = JSON.parse(m.data); } catch { return; }
         if (msg.t === 'vconf') setupDecoder(msg);
         if (msg.t === 'rate') rate = { fps: msg.fps, kbps: msg.kbps };
+        if (msg.t === 'rumble') padRumble(msg.i, msg.l, msg.s);
+        if (msg.t === 'gstate') gameState(msg);
       };
       // Visszajelzés a host szabályozójának (fél másodpercenként)
       fbTimer = setInterval(() => {
@@ -349,7 +376,8 @@ const StreamClient = (() => {
       await pc.setLocalDescription(offer);
       await RTC.iceDone(pc);
       const codecs = await decodableCodecs();
-      const r = await gamo.streamOffer(id, { proto: 2, sdp: pc.localDescription.sdp, width: opts.width, height: opts.height, fps: opts.fps, bitrate: opts.bitrate, codecs, prefer: opts.codec || 'auto' });
+      const r = await gamo.streamOffer(id, { proto: 2, sdp: pc.localDescription.sdp, width: opts.width, height: opts.height, fps: opts.fps, bitrate: opts.bitrate, codecs, prefer: opts.codec || 'auto',
+        game: game && game.gameId && !opts.desktopStream ? { id: game.gameId, resume: !!game.resume } : null });
       await pc.setRemoteDescription({ type: 'answer', sdp: r.sdp });
       if (r.vigem === false) toast('A gaming PC-n nincs ViGEmBus driver: a kontroller nem fog működni (billentyűzet/egér igen).', 'err', 8000);
       if (!opts.preview) bindInput();
@@ -386,6 +414,7 @@ const StreamClient = (() => {
     const h = hostId;
     const old = pc; pc = null;
     setTimeout(() => { try { old && old.close(); } catch { /* zárva */ } }, 150);
+    stopRumble();
     fast = rel = vch = null;
     if (ui) { ui.remove(); ui = null; }
     Nav.suspend(false);

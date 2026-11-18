@@ -1,7 +1,7 @@
 {
   "name": "inarix",
   "productName": "InariX",
-  "version": "0.9.6-alpha",
+  "version": "0.9.7-alpha",
   "description": "Konzolos felület laptopra, távoli gépről streamelt játékokkal (Sunshine/Moonlight).",
   "main": "src/main/main.js",
   "author": "InariX",

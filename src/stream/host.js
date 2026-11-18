@@ -1,4 +1,21 @@
 'use strict';
+let rumbleTo = null, gstateTo = null, lastGstate = null;
+// játék stream maszk: csak a játék / launcher ablaka látszik (normalizált téglalap), black: semmi; null: teljes kép
+let mask = null, maskCanvas = null, maskCtx = null;
+if (window.streamHost && window.streamHost.onMask) window.streamHost.onMask((m) => { mask = m || null; });
+if (window.streamHost && window.streamHost.onGstate) window.streamHost.onGstate((d) => { lastGstate = d; if (gstateTo) gstateTo(d); });
+function maskFrame(frame) {
+  const w = frame.displayWidth, h = frame.displayHeight;
+  if (!maskCanvas || maskCanvas.width !== w || maskCanvas.height !== h) { maskCanvas = new OffscreenCanvas(w, h); maskCtx = maskCanvas.getContext('2d', { alpha: false, desynchronized: true }); }
+  maskCtx.fillStyle = '#000';
+  maskCtx.fillRect(0, 0, w, h);
+  if (!mask.black) {
+    const x = Math.round(mask.x * w), y = Math.round(mask.y * h), mw = Math.round(mask.w * w), mh = Math.round(mask.h * h);
+    if (mw > 0 && mh > 0) maskCtx.drawImage(frame, x, y, mw, mh, x, y, mw, mh);
+  }
+  return new VideoFrame(maskCanvas, { timestamp: frame.timestamp });
+}
+if (window.streamHost && window.streamHost.onRumble) window.streamHost.onRumble((d) => { if (rumbleTo) rumbleTo(d); });
 /* global streamHost, RTC */
 // Beépített stream – HOST rögzítő (rejtett ablak).
 // Videó: képernyő → WebCodecs VideoEncoder (hardveres H.264, realtime) → main → UDP (FEC + NACK)
@@ -165,7 +182,7 @@ async function runVideo(track, rel, opts, my) {
       // Torlódás: a kockát KÓDOLÁS ELŐTT dobjuk el – ez nem rontja a képet, kulcskocka sem kell hozzá
       if (encoder.encodeQueueSize > 2 || udpQueue > highWater() * 2) { dropped++; rc.congestion++; continue; }
       lastSentAt = lastSentAt && now - lastSentAt < interval * 2 ? lastSentAt + interval : now;
-      encoder.encode(frame, { keyFrame: wantKey });
+      if (mask) { const mf = maskFrame(frame); encoder.encode(mf, { keyFrame: wantKey }); mf.close(); } else encoder.encode(frame, { keyFrame: wantKey });
       wantKey = false;
     } catch (e) {
       streamHost.stats({ error: e.message });
@@ -188,11 +205,17 @@ streamHost.onOffer(async ({ id, sdp, width, height, fps, bitrate, codecs, prefer
     video.contentHint = 'motion';
 
     pc = new RTCPeerConnection({ iceServers: [] });
+    let relCh = null;
+    // a játék rezgése (virtuális kontroller → ViGEm) a kliens kontrollerére
+    gstateTo = (d) => { if (relCh && relCh.readyState === 'open') relCh.send(JSON.stringify({ t: 'gstate', ...d })); };
+    rumbleTo = (d) => { if (relCh && relCh.readyState === 'open') relCh.send(JSON.stringify({ t: 'rumble', i: d.i, l: d.l, s: d.s })); };
     let started = false;
     pc.ondatachannel = (e) => {
       const ch = e.channel;
       if (ch.label === 'fast' || ch.label === 'rel') ch.onmessage = (m) => { if (typeof m.data === 'string' && !/"t":"(kf|fb)"/.test(m.data)) streamHost.input(m.data); };
       if (ch.label === 'rel') {
+        relCh = ch;
+        mask = null; lastGstate = null;
         const go = () => { if (!started && my === session) { started = true; runVideo(video, ch, { bitrate, fps, codecs, prefer }, my).catch((err) => streamHost.stats({ error: err.message })); } };
         if (ch.readyState === 'open') go(); else ch.onopen = go;
       }

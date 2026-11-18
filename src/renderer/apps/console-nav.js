@@ -116,6 +116,9 @@
       else if (dir === 'Right') { if (r.left < c.right - Math.min(c.width * 0.3, 20)) continue; gap = r.left - c.right; off = Math.abs(y - cy); if (off > Math.max(c.height, r.height) * 1.2) continue; }
       else { if (r.right > c.left + Math.min(c.width * 0.3, 20)) continue; gap = c.left - r.right; off = Math.abs(y - cy); if (off > Math.max(c.height, r.height) * 1.2) continue; }
       gap = Math.max(0, gap);
+      // vízszintesen az ugyanabban a sorban lévő (függőlegesen átfedő) elemek előnyt élveznek
+      const same = horiz && Math.min(r.bottom, c.bottom) - Math.max(r.top, c.top) > Math.min(r.height, c.height) * 0.4;
+      if (horiz && !same) off += 400;
       ok.push([el, gap, off]);
       near = Math.min(near, gap);
     }
@@ -228,6 +231,27 @@
       }
     }
     return state();
+  };
+
+  // Ⓐ a D-paddal kijelölt elemen: szövegmezőnél 'edit' (+ a jelenlegi tartalom), egyébként kattintás
+  window.__inxActivate = () => {
+    const el = cur && document.contains(cur) ? cur : document.activeElement;
+    if (!el || el === document.body) return { kind: 'none' };
+    if (editable(el)) {
+      try { el.focus(); } catch { /* */ }
+      const label = el.getAttribute('aria-label') || el.getAttribute('placeholder') || '';
+      return { kind: 'edit', value: el.isContentEditable ? el.innerText.replace(/\n$/, '') : el.value || '', label, password: el.type === 'password', numeric: el.type === 'number' || el.inputMode === 'numeric' };
+    }
+    el.click();
+    return { kind: 'click' };
+  };
+  // a fókuszált mező teljes tartalmának kijelölése (a képernyő-billentyűzet szövege lecseréli)
+  window.__inxSelectField = () => {
+    const el = document.activeElement;
+    if (!el) return false;
+    if (el.isContentEditable) { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return true; }
+    if (typeof el.select === 'function') { el.select(); return true; }
+    return false;
   };
 
   // app-specifikus előkészítés (pl. az oldal sötét témája), amit az InariX ad át

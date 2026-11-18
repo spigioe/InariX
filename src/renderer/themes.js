@@ -41,7 +41,7 @@ const THEME_PRESETS = [
   { id: 'forest', name: 'Erdő', a1: '#22c55e', a2: '#facc15', bg: '#07120c', panel: '#0f1a12', bgMode: 'art', bgDim: 30, radius: 12, font: 'georgia', tiles: 'portrait', glow: false },
   { id: 'arctic', name: 'Sarkvidék', a1: '#14b8a6', a2: '#e4e4e7', bg: '#0b1020', panel: '#1b1e2b', bgMode: 'gradient', bgDim: 0, radius: 20, font: 'verdana', tiles: 'portrait', glow: false },
 ];
-const THEME_KEYS = ['name', 'a1', 'a2', 'bg', 'panel', 'bgMode', 'bgImage', 'bgDim', 'radius', 'font', 'tiles', 'grow', 'glow'];
+const THEME_KEYS = ['name', 'a1', 'a2', 'bg', 'panel', 'bgMode', 'bgImage', 'bgDim', 'radius', 'font', 'tiles', 'grow', 'tileIn', 'tileFx', 'glow'];
 
 const themeList = () => [...THEME_PRESETS, ...((S.state && S.state.settings.themes) || [])];
 function activeTheme() {
@@ -79,6 +79,8 @@ function applyTheme(t) {
   b.dataset.bgmode = t.bgMode || 'art';
   b.dataset.tiles = t.tiles || 'portrait';
   b.dataset.grow = t.grow || 'wide';
+  b.dataset.tileIn = t.tileIn || 'zoom';
+  b.dataset.tileFx = t.tileFx || 'both';
   b.classList.toggle('glow', !!t.glow);
   const custom = $('#bg-custom');
   if (custom) custom.style.backgroundImage = t.bgMode === 'image' && t.bgImage ? `url("${toImageUrl(t.bgImage)}")` : '';
@@ -159,6 +161,9 @@ async function openThemeEditor(base) {
     { group: 'Forma és betű' },
     { type: 'select', label: 'Lekerekítés', options: [[0, 'Szögletes'], [4, 'Enyhe'], [8, 'Kicsi'], [14, 'Közepes'], [20, 'Nagy'], [28, 'Extra']], get: () => draft.radius, set: (v) => set('radius')(Number(v)) },
     { type: 'select', label: 'Betűtípus', options: Object.entries(FONTS).map(([k, [n]]) => [k, n]), get: () => draft.font, set: set('font') },
+    { type: 'select', label: 'Csempekép megjelenése', desc: 'Betöltéskor és képváltáskor (pl. a kijelölt csempe kiszélesedésekor)',
+      options: [['zoom', 'Ráközelítés'], ['fade', 'Áttűnés'], ['slide', 'Beúszás alulról'], ['blur', 'Élesedés'], ['flip', 'Átfordulás'], ['pop', 'Felpattanás'], ['none', 'Nincs (azonnali)']], get: () => draft.tileIn || 'zoom', set: set('tileIn') },
+    { type: 'select', label: 'Kijelölt csempe effekt', options: [['both', 'Fénycsík + lassú nagyítás'], ['sheen', 'Csak fénycsík'], ['kb', 'Csak lassú nagyítás'], ['glow', 'Lüktető fény'], ['tilt', 'Billegés'], ['none', 'Nincs']], get: () => draft.tileFx || 'both', set: set('tileFx') },
     { type: 'select', label: 'Kijelölt csempe (kezdőképernyő)', options: [['wide', 'Oldalirányba nyúlik meg'], ['big', 'Az egész nagyobb lesz']], get: () => draft.grow || 'wide', set: set('grow') },
     { type: 'select', label: 'Játék csempék', options: [['portrait', 'Álló borító (2:3)'], ['square', 'Négyzetes (1:1)'], ['landscape', 'Fekvő borító (16:9)']], get: () => draft.tiles, set: set('tiles') },
   ];

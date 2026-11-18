@@ -351,7 +351,9 @@ async function moreActions(e) {
   const steamId = e.store === 'steam' ? e.storeId : e.artFromSteam;
   if (steamId) items.push({ label: 'Áruház oldal megnyitása (böngésző)', value: 'store' });
   items.push({ label: 'Játék beállításai (felbontás, vezérlés, indítási paraméterek)', value: 'prefs', kind: 'primary' });
-  items.push({ label: e.hidden ? 'Megjelenítés a könyvtárban' : 'Elrejtés a könyvtárból', value: 'hide' });
+  if (e.hidden) items.push({ label: 'Visszahozás a listába', value: 'hide' });
+  else items.push({ icon: 'close', label: 'Eltávolítás a listából', value: 'remove' });
+  if (e.store === 'custom') items.push({ label: 'Átnevezés', value: 'rename' });
   if (e.playSec || e.launches) items.push({ label: 'Játékidő statisztika nullázása', value: 'reset' });
   items.push({ label: 'Mégse', value: null });
   const v = await modal({ title: e.name, items });
@@ -359,6 +361,8 @@ async function moreActions(e) {
   if (!v) return;
   if (v === 'store') return gamo.openExternal(`https://store.steampowered.com/app/${steamId}`).catch(() => {});
   if (v === 'hide') return toggleHidden(e);
+  if (v === 'remove') { if (typeof closeDetail === 'function') closeDetail(); return removeFromList(e); }
+  if (v === 'rename') return renameGame(e);
   if (v === 'reset') {
     if (await confirmBox('Nullázás', 'A InariXben mért játékidő és indításszám törlődik.', 'Nullázás')) { await gamo.resetStats(e.key); e.playSec = 0; e.launches = 0; renderDetail(e); }
     return;

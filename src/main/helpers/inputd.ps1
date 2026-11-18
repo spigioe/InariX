@@ -10,6 +10,7 @@
 #   U cp          Unicode karakter (UTF-16 kódegység) leütése
 #   P i btn lt rt lx ly rx ry   kontroller állapot (XUSB formátum)
 #   PX i          kontroller leválasztása
+#   WINS [mappa]  látható felső szintű ablakok (fizikai pixelben) + hány folyamat fut a mappából
 #   PING | VIGEM | EXIT
 # Kimenet: READY vigem=0|1 · PONG · VIGEM ok|hiba · ERROR ...
 $ErrorActionPreference = 'Stop'
@@ -78,6 +79,30 @@ namespace InariX {
   public static class Vigem {
     static Guid BUS = new Guid("96E42B22-F5E9-42F8-B043-ED0F932F014F");
     const uint IOCTL_PLUGIN = 0x2AA004, IOCTL_UNPLUG = 0x2AA008, IOCTL_CHECK_VERSION = 0x2AA00C, IOCTL_WAIT_READY = 0x2AA010, IOCTL_XUSB_SUBMIT = 0x2AA808;
+    // a játék rezgés / LED kérései: függőben marad, amíg a játék új rezgést nem kér (ViGEmClient: vigem_target_x360_register_notification)
+    const uint IOCTL_XUSB_NOTIFY = 0x2AE804;
+    public static readonly object OutLock = new object();
+    static Dictionary<int, System.Threading.Thread> notifiers = new Dictionary<int, System.Threading.Thread>();
+    static void StartNotify(int i, uint serial) {
+      var th = new System.Threading.Thread(() => {
+        int lastL = -1, lastS = -1;
+        while (true) {
+          uint cur;
+          if (!serials.TryGetValue(i, out cur) || cur != serial) return;
+          // XUSB_REQUEST_NOTIFICATION { ULONG Size=12; ULONG SerialNo; UCHAR LargeMotor; UCHAR SmallMotor; UCHAR LedNumber; }
+          var b = new byte[12];
+          BitConverter.GetBytes((uint)12).CopyTo(b, 0);
+          BitConverter.GetBytes(serial).CopyTo(b, 4);
+          if (!Ioctl(IOCTL_XUSB_NOTIFY, b, 0xFFFFFFFF)) { System.Threading.Thread.Sleep(200); continue; }
+          int L = b[8], S = b[9];
+          if (L == lastL && S == lastS) continue;
+          lastL = L; lastS = S;
+          lock (OutLock) { Console.WriteLine("RUMBLE " + i + " " + L + " " + S); Console.Out.Flush(); }
+        }
+      }) { IsBackground = true };
+      notifiers[i] = th;
+      th.Start();
+    }
 
     [StructLayout(LayoutKind.Sequential)] struct SP_DEVICE_INTERFACE_DATA { public uint cbSize; public Guid InterfaceClassGuid; public uint Flags; public IntPtr Reserved; }
     [DllImport("setupapi.dll", SetLastError = true)] static extern IntPtr SetupDiGetClassDevs(ref Guid g, IntPtr en, IntPtr hwnd, uint flags);
@@ -169,6 +194,7 @@ namespace InariX {
         if (okp) {
           if (!Ioctl(IOCTL_WAIT_READY, U32s(8, serial), 5000)) LastError = "WAIT_READY: " + LastWin32;
           serials[i] = serial;
+          if (i != 99) StartNotify(i, serial);
           return true;
         }
       }
@@ -196,14 +222,73 @@ namespace InariX {
     public static void Unplug(int i) {
       uint serial;
       if (!serials.TryGetValue(i, out serial)) return;
+      serials.Remove(i); // a rezgésfigyelő szál ebből látja, hogy ki kell lépnie
+      notifiers.Remove(i);
       Ioctl(IOCTL_UNPLUG, U32s(8, serial));
-      serials.Remove(i);
     }
     public static void UnplugAll() { foreach (var i in new List<int>(serials.Keys)) Unplug(i); }
   }
 
+  // Ablakok felmérése a játék-stream maszkolásához (melyik ablakot küldjük a kliensnek)
+  public static class Wins {
+    delegate bool EnumProc(IntPtr h, IntPtr l);
+    [StructLayout(LayoutKind.Sequential)] struct RECT { public int l, t, r, b; }
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc f, IntPtr l);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out int pid);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int i);
+    [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+    [DllImport("user32.dll")] static extern int GetSystemMetrics(int i);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+    [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr h, int a, out int v, int size);
+    [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr OpenProcess(uint access, bool inherit, int pid);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageName(IntPtr h, int flags, System.Text.StringBuilder sb, ref int size);
+    static Dictionary<int, string> exeCache = new Dictionary<int, string>();
+    static string Exe(int pid) {
+      string e;
+      if (exeCache.TryGetValue(pid, out e)) return e;
+      e = "";
+      IntPtr h = OpenProcess(0x1000, false, pid); // PROCESS_QUERY_LIMITED_INFORMATION
+      if (h != IntPtr.Zero) { var sb = new System.Text.StringBuilder(1024); int n = 1024; if (QueryFullProcessImageName(h, 0, sb, ref n)) e = sb.ToString(); CloseHandle(h); }
+      if (exeCache.Count > 4000) exeCache.Clear();
+      exeCache[pid] = e;
+      return e;
+    }
+    public static string Run(string dir) {
+      var sb = new System.Text.StringBuilder();
+      sb.Append("WINS ").Append(GetSystemMetrics(0)).Append(' ').Append(GetSystemMetrics(1)).Append(' ').Append(GetForegroundWindow().ToInt64());
+      int inDir = 0;
+      if (!string.IsNullOrEmpty(dir)) {
+        string d = dir.TrimEnd('\\') + "\\";
+        foreach (var p in System.Diagnostics.Process.GetProcesses()) {
+          try { string x = Exe(p.Id); if (x.StartsWith(d, StringComparison.OrdinalIgnoreCase)) inDir++; } catch { }
+        }
+      }
+      sb.Append(' ').Append(inDir).Append('|');
+      EnumWindows((h, l) => {
+        if (!IsWindowVisible(h) || IsIconic(h)) return true;
+        int ex = GetWindowLong(h, -20);
+        if ((ex & 0x80) != 0) return true; // WS_EX_TOOLWINDOW
+        int cloaked; if (DwmGetWindowAttribute(h, 14, out cloaked, 4) == 0 && cloaked != 0) return true;
+        RECT r; if (!GetWindowRect(h, out r)) return true;
+        if (r.r - r.l < 120 || r.b - r.t < 80) return true;
+        int pid; GetWindowThreadProcessId(h, out pid);
+        int style = GetWindowLong(h, -16);
+        int flags = ((style & 0x00C00000) == 0x00C00000 ? 1 : 0) | ((ex & 0x8) != 0 ? 2 : 0); // 1: keretes (címsor), 2: mindig felül
+        sb.Append(h.ToInt64()).Append('\t').Append(pid).Append('\t').Append(r.l).Append('\t').Append(r.t).Append('\t').Append(r.r).Append('\t').Append(r.b).Append('\t').Append(flags).Append('\t').Append(Exe(pid)).Append('|');
+        return true;
+      }, IntPtr.Zero);
+      return sb.ToString();
+    }
+  }
+
   public static class Daemon {
     public static void Run() {
+      Wins.SetProcessDPIAware(); // a GetWindowRect fizikai pixelt adjon (a rögzített kép is fizikai felbontású)
       bool vigem = Vigem.Open();
       Console.WriteLine("READY vigem=" + (vigem ? 1 : 0) + (vigem ? "" : " " + Vigem.LastError.Replace(' ', '_')));
       Console.Out.Flush();
@@ -220,9 +305,10 @@ namespace InariX {
             case "U": Input.Unicode(int.Parse(p[1])); break;
             case "P": Vigem.Report(int.Parse(p[1]), int.Parse(p[2]), int.Parse(p[3]), int.Parse(p[4]), int.Parse(p[5]), int.Parse(p[6]), int.Parse(p[7]), int.Parse(p[8])); break;
             case "PX": Vigem.Unplug(int.Parse(p[1])); break;
-            case "PING": Console.WriteLine("PONG"); Console.Out.Flush(); break;
+            case "PING": lock (Vigem.OutLock) { Console.WriteLine("PONG"); Console.Out.Flush(); } break;
             case "GP": { int r = Input.GpuPriority(int.Parse(p[1]), int.Parse(p[2])); if (r != 0 && p[2] == "5") r = Input.GpuPriority(int.Parse(p[1]), 4); Console.WriteLine("GP " + p[1] + " " + r); Console.Out.Flush(); break; }
             case "DEBUG": Vigem.Debug = true; break;
+            case "WINS": { string r = Wins.Run(line.Length > 5 ? line.Substring(5).Trim() : ""); lock (Vigem.OutLock) { Console.WriteLine(r); Console.Out.Flush(); } break; }
             case "VIGEM": Console.WriteLine("VIGEM " + (Vigem.Plug(99) ? "ok" : "hiba " + Vigem.LastError)); Vigem.Unplug(99); Console.Out.Flush(); break;
             case "EXIT": Vigem.UnplugAll(); return;
           }

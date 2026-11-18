@@ -86,14 +86,15 @@ body.booting #app { opacity: 0; }
 .tile { flex: 0 0 auto; width: clamp(120px, 9.2vw, 210px); aspect-ratio: 2 / 3; border-radius: .9em; overflow: hidden; position: relative; background: var(--panel-solid); transition: transform .18s ease, box-shadow .18s ease; outline: none; }
 .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
 /* csempekép: a csempe alakjához választott kép; ha nem illik, egészben, elmosott háttéren (lásd coverEl) */
-.tile img.art { position: relative; }
-.tile img.art:not([src]), .tile img.art-bg:not([src]) { visibility: hidden; }
-.tile img.art-bg { position: absolute; inset: -12%; width: 124%; height: 124%; filter: blur(18px) brightness(.55) saturate(1.25); display: none; }
-.tile.fit:not(.hero) img.art-bg { display: block; }
-.tile.fit:not(.hero) img.art { object-fit: contain; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, .55)); }
-.tile img.art-logo { position: absolute; inset: 0; margin: auto; width: 78%; height: 46%; object-fit: contain; display: none; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, .75)); }
-.tile.hero img.art-logo[src] { display: block; }
-.tile.hero img.art { object-position: 50% 30%; }
+/* csempekép rétegek: az új kép áttűnéssel úszik be a régi fölé */
+.tile .art-layer { position: absolute; inset: 0; overflow: hidden; opacity: 0; transition: opacity .35s ease, transform .45s cubic-bezier(.2, .7, .2, 1); }
+.tile .art-layer.first { transform: scale(1.06); }
+.tile .art-layer.in { opacity: 1; transform: none; }
+.tile .art-layer img.art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.tile .art-layer img.art-bg { position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: cover; filter: blur(18px) brightness(.55) saturate(1.25); }
+.tile .art-layer.fit img.art { object-fit: contain; filter: drop-shadow(0 6px 18px rgba(0, 0, 0, .55)); }
+.tile .art-layer img.art-logo { position: absolute; inset: 0; margin: auto; width: 78%; height: 46%; object-fit: contain; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, .75)); }
+.tile .art-layer.hero img.art { object-position: 50% 30%; }
 .tile .ph { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: .9em; font-weight: 700; background: var(--grad); }
 .tile .ph .ini { position: absolute; top: .4em; left: .5em; font-size: 2.6em; opacity: .35; font-weight: 900; }
 .tile .ph.landscape-fit { background-size: cover; background-position: center; }
@@ -628,10 +629,16 @@ body.night::after { content: ''; position: fixed; inset: 0; pointer-events: none
 .h-row[data-coll] .row-title { border-left: 4px solid var(--grp, var(--a2)); padding-left: .6em; }
 /* Animált csempék: lassú „Ken Burns” nagyítás és fénycsík a kijelölt csempén */
 .tile.focused img { animation: tileKB 9s ease-in-out infinite alternate; }
+body[data-tile-fx="sheen"] .tile.focused img, body[data-tile-fx="glow"] .tile.focused img, body[data-tile-fx="tilt"] .tile.focused img, body[data-tile-fx="none"] .tile.focused img { animation: none; }
 @keyframes tileKB { from { transform: scale(1); } to { transform: scale(1.07); } }
 .tile.focused::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 1;
   background: linear-gradient(115deg, transparent 35%, rgba(255, 255, 255, .16) 48%, transparent 60%); transform: translateX(-130%); animation: tileSheen 3.2s ease-in-out .4s infinite; }
 @keyframes tileSheen { 0% { transform: translateX(-130%); } 55%, 100% { transform: translateX(130%); } }
+body[data-tile-fx="kb"] .tile.focused::after, body[data-tile-fx="glow"] .tile.focused::after, body[data-tile-fx="tilt"] .tile.focused::after, body[data-tile-fx="none"] .tile.focused::after { display: none; }
+body[data-tile-fx="glow"] .tile.focused { animation: tileGlow 1.8s ease-in-out infinite; }
+@keyframes tileGlow { 0%, 100% { box-shadow: 0 0 0 3px var(--a2), 0 0 14px color-mix(in srgb, var(--a2) 35%, transparent); } 50% { box-shadow: 0 0 0 3px var(--a2), 0 0 34px color-mix(in srgb, var(--a2) 75%, transparent); } }
+body[data-tile-fx="tilt"] .tile.focused .art-layer.in { animation: tileTilt 4s ease-in-out infinite; }
+@keyframes tileTilt { 0%, 100% { transform: perspective(600px) rotateY(-4deg) scale(1.03); } 50% { transform: perspective(600px) rotateY(4deg) scale(1.03); } }
 body.reduce-motion .tile.focused img, body.reduce-motion .tile.focused::after { animation: none; }
 
 /* Élő háttér hangsúlyosabban: amíg az előzetes megy, a sötétítés és a kép elhalványul */
@@ -853,3 +860,37 @@ body.switcher-open .as-cap { font-size: 1.2em; }
 .as-close { display: flex; align-items: center; justify-content: center; gap: .5em; padding: .7em; border-radius: calc(.7em * var(--rs)); background: var(--panel); border: 1px solid var(--line); color: var(--text); font-weight: 700; }
 .as-close .ui-ico { width: 1.1em; height: 1.1em; }
 .as-close.focused { box-shadow: var(--focus); background: color-mix(in srgb, #dc2626 45%, var(--panel)); }
+/* Játékok kezelése */
+.lib-manage { border: 1px dashed color-mix(in srgb, var(--a2) 50%, transparent); margin-bottom: .6em; }
+.lib-manage .ci { background: var(--grad) !important; color: #fff; }
+.gm-wait { display: flex; align-items: center; gap: .8em; padding: .6em 0 1em; color: var(--muted); }
+.gm-list { display: flex; flex-direction: column; gap: .45em; max-height: 56vh; overflow-y: auto; padding: 4px; margin-bottom: 1em; scrollbar-width: thin; }
+.gm-item { display: flex; align-items: center; gap: .8em; padding: .7em .9em; border-radius: calc(.7em * var(--rs)); background: var(--panel); border: 1px solid var(--line); color: var(--text); text-align: left; opacity: .55; }
+.gm-item.on { opacity: 1; border-color: color-mix(in srgb, var(--a2) 55%, transparent); }
+.gm-check { width: 1.9em; height: 1.9em; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--panel-solid); }
+.gm-item.on .gm-check { background: var(--grad); color: #fff; }
+.gm-check .ui-ico { width: 1.1em; height: 1.1em; }
+.gm-txt { display: flex; flex-direction: column; min-width: 0; }
+.gm-txt small { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gm-item.focused { box-shadow: var(--focus); }
+.lib-tools { display: flex; flex-direction: column; gap: .4em; margin-bottom: .7em; }
+.lib-tools .lib-manage { margin-bottom: 0; }
+/* csempekép megjelenése – a témakezelőben választható */
+body[data-tile-in="fade"] .tile .art-layer.first { transform: none; }
+body[data-tile-in="slide"] .tile .art-layer { transform: translateY(14%); }
+body[data-tile-in="slide"] .tile .art-layer.in { transform: none; }
+body[data-tile-in="blur"] .tile .art-layer { transform: scale(1.04); filter: blur(14px); transition: opacity .35s ease, filter .5s ease, transform .5s ease; }
+body[data-tile-in="blur"] .tile .art-layer.in { filter: none; transform: none; }
+body[data-tile-in="flip"] .tile .art-layer { transform: perspective(700px) rotateY(-70deg); transform-origin: left center; transition: opacity .3s ease, transform .5s cubic-bezier(.2, .8, .25, 1); }
+body[data-tile-in="flip"] .tile .art-layer.in { transform: none; }
+body[data-tile-in="pop"] .tile .art-layer { transform: scale(.82); transition: opacity .25s ease, transform .45s cubic-bezier(.34, 1.56, .64, 1); }
+body[data-tile-in="pop"] .tile .art-layer.in { transform: none; }
+body[data-tile-in="none"] .tile .art-layer { transition: none; transform: none; }
+/* Játékaim: kis eszközgombok a lista alján */
+.lib-tools { display: flex; flex-direction: row; gap: .45em; margin: .9em 0 .4em; }
+.lib-tool { flex: 1; display: flex; align-items: center; justify-content: center; gap: .4em; padding: .5em .6em; border-radius: calc(.6em * var(--rs)); background: transparent; border: 1px dashed var(--line); color: var(--muted); font-size: .82em; font-weight: 700; }
+.lib-tool .ui-ico { width: 1.05em; height: 1.05em; }
+.lib-tool.focused { color: var(--text); border-style: solid; border-color: var(--a2); box-shadow: var(--focus); }
+/* játék stream: felirat, amíg a játék ablaka meg nem jelenik */
+#stream-gstate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 1em 1.8em; border-radius: 999px; background: rgba(10, 12, 18, .82); color: #fff; font-weight: 700; font-size: 1.1em; opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 5; }
+#stream-gstate.show { opacity: 1; }

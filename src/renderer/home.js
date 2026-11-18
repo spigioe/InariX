@@ -465,6 +465,8 @@ function renderLibrary(focusFirst) {
   // bal oldali kategória lista
   const cur = Nav.current();
   const navFocus = cur && navEl.contains(cur) ? cur.dataset.cat : null;
+  const act = (icon, label, fn) => h('button', { class: 'lib-tool focusable', onclick: fn }, uiIcon(icon), label);
+  const tools = h('div', { class: 'lib-tools' }, act('search', 'Keresés', () => scanAndAddAll()), act('download', 'Hozzáadás', () => addCustomGame()));
   navEl.replaceChildren(...cats.map((c) => {
     if (c.group) return h('div', { class: 'lib-group' }, c.group);
     const b = h('button', { class: `set-cat lib-cat focusable${c.id === S.libCat ? ' active' : ''}`, dataset: { cat: c.id } },
@@ -480,6 +482,7 @@ function renderLibrary(focusFirst) {
     b.addEventListener('click', () => { const f = grid.querySelector('.focusable'); if (f) Nav.focus(f); });
     return b;
   }));
+  navEl.append(tools); // keresés / hozzáadás a lista alján
   if (navFocus) { const b = navEl.querySelector(`[data-cat="${navFocus}"]`); if (b) Nav.focus(b, { silent: true, scroll: false }); }
 
   // eszközök: keresés, rendezés

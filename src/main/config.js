@@ -20,7 +20,7 @@ const DEFAULTS = () => ({
     disableLockOnWake: false, // régi kapcsoló (→ noLockMode 'always')
     noLockMode: 'off',        // off | docked | always – mikor ne kérjen PIN-t/jelszót a Windows
   },
-  hostMode: { enabled: false, name: os.hostname(), port: 47800, token: newToken(), steamApiKey: '', customGames: [], sunshineUser: '', sunshinePass: '', allowStream: true, adminMode: false },
+  hostMode: { enabled: false, name: os.hostname(), port: 47800, token: newToken(), steamApiKey: '', customGames: [], excludedExes: [], sunshineUser: '', sunshinePass: '', allowStream: true, adminMode: false },
   setupDone: false,         // első indítás varázsló lefutott-e
   ui: { sounds: true, bootAnimation: true, theme: 'aurora', accent: 'aurora', scale: 100, screensaverMin: 5, pinOrder: [], weatherCity: '', showDate: true, nightMode: false, hostNotify: true, rumble: true, reduceMotion: false, kbLayout: 'auto' },
   library: { preferLocal: false, showHidden: false, sort: 'recent', groupByHost: true, showOwned: true },

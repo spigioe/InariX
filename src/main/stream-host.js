@@ -24,6 +24,14 @@ const KEYMAP = {
 
 const int = (v, min, max) => Math.max(min, Math.min(max, Math.round(Number(v) || 0)));
 
+// WINS sor: „WINS sw sh fg inDir|h\tpid\tl\tt\tr\tb\tflags\texe|…”
+function parseWins(line) {
+  const [head, ...rows] = line.trim().split('|').filter(Boolean);
+  const [, sw, sh, fg, inDir] = head.split(' ');
+  const list = rows.map((r) => { const f = r.split('\t'); const l = +f[2], t = +f[3], rr = +f[4], b = +f[5]; return { h: f[0], pid: +f[1], l, t, r: rr, b, area: (rr - l) * (b - t), flags: +f[6], exe: f[7] || '' }; });
+  return { sw: +sw || 1920, sh: +sh || 1080, fg: String(fg), inDir: +inDir || 0, list };
+}
+
 class StreamHost {
   constructor(log = console.log) {
     this.log = log;
@@ -83,6 +91,12 @@ class StreamHost {
       let i;
       while ((i = buf.indexOf('\n')) >= 0) {
         const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (line.startsWith('WINS ')) { const w = this.winsWait; this.winsWait = null; if (w) w(parseWins(line)); continue; }
+        if (line.startsWith('RUMBLE')) {
+          const [, i, l, s] = line.split(' ').map(Number);
+          if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:rumble', { i, l, s });
+          continue;
+        }
         if (line.startsWith('READY')) { this.vigem = /vigem=1/.test(line); this.log(`[stream] bemeneti segéd kész · virtuális kontroller: ${this.vigem ? 'igen' : 'nem (ViGEmBus nincs telepítve)'}`); }
         else if (line) this.log(`[inputd] ${line}`);
       }
@@ -92,6 +106,91 @@ class StreamHost {
   }
 
   send(cmd) { if (this.inputd && this.inputd.stdin.writable) this.inputd.stdin.write(`${cmd}\n`); }
+
+  // ---------- Játék-stream: csak a játék (vagy a launchere) ablaka látszik, a többi fekete ----------
+  // 1. az indítás után elsőként megnyíló új ablak (launcher, Steam indítóablak, vagy maga a játék)
+  // 2. ha az bezárult: a játék mappájából futó program ablaka (MS Store / Xbox játéknál: teljes képernyő)
+  // 3. ha a játék mappájából már semmi sem fut: a stream bezárul. Asztal módban mindig teljes képernyő.
+  wins(dir = '') {
+    this.ensureInput();
+    return new Promise((res) => {
+      const t = setTimeout(() => { if (this.winsWait === done) this.winsWait = null; res(null); }, 3000);
+      const done = (v) => { clearTimeout(t); res(v); };
+      if (this.winsWait) { const prev = this.winsWait; this.winsWait = (v) => { prev(v); done(v); }; } else this.winsWait = done;
+      this.send(`WINS ${dir}`);
+    });
+  }
+  // indítás előtt: a már nyitott ablakok (ezek nem „új” ablakok)
+  async prepareLaunch(game) {
+    const w = await this.wins().catch(() => null);
+    this.pending = { game, baseline: new Set(w ? w.list.map((x) => x.h) : []), at: Date.now() };
+    this.log(`[stream] játékindítás előkészítve: ${game.name} (${this.pending.baseline.size} meglévő ablak)`);
+  }
+  startTracker(gameInfo) {
+    this.stopTracker();
+    const pend = this.pending && this.pending.game && this.pending.game.id === gameInfo.id && Date.now() - this.pending.at < 120000 ? this.pending : null;
+    const game = (pend && pend.game) || gameInfo.game;
+    if (!game) return;
+    const ms = game.store === 'msstore';
+    const dir = path.resolve(game.store === 'custom' && game.launch && game.launch.exe ? path.dirname(game.launch.exe) : game.installDir || '').toLowerCase();
+    const T = { game, ms, dir, baseline: pend ? pend.baseline : null, phase: gameInfo.resume ? 'game' : 'first', first: null, seen: false, gone: 0, start: Date.now(), mask: undefined, state: '' };
+    this.tracker = T;
+    const self = path.dirname(process.execPath).toLowerCase();
+    const SYS = /\\(explorer|textinputhost|shellexperiencehost|searchhost|startmenuexperiencehost|lockapp|systemsettings|applicationframehost|searchapp|widgets|gamebar|gamebarftserver|xboxgamebarwidgets)\.exe$/i;
+    const ignore = (x) => !x.exe || x.exe.toLowerCase().startsWith(self) || SYS.test(x.exe);
+    const inDir = (x) => x.exe && x.exe.toLowerCase().startsWith(`${T.dir}\\`);
+    this.log(`[stream] játék stream: ${game.name} · ${ms ? 'MS Store – teljes képernyő' : `mappa: ${T.dir}`}${gameInfo.resume ? ' · folytatás' : ''}`);
+    const tick = async () => {
+      if (this.tracker !== T) return;
+      const w = await this.wins(T.dir).catch(() => null);
+      if (this.tracker !== T) return;
+      if (w) {
+        if (!T.baseline) T.baseline = new Set(w.list.map((x) => x.h)); // nincs előzetes pillanatkép: a mostaniak a régiek
+        let target = null, state = 'wait';
+        // kilépés: a játék mappájából már semmi sem fut (miután már futott)
+        if (w.inDir > 0) { T.seen = true; T.gone = 0; } else if (T.seen) T.gone++;
+        if (T.seen && T.gone >= 3) { this.endGame('A játék bezárult'); return; }
+        if (T.phase === 'first') {
+          if (!T.first) {
+            const fresh = w.list.filter((x) => !T.baseline.has(x.h) && !ignore(x));
+            const pick = fresh.find((x) => x.h === w.fg) || fresh.sort((a, b) => b.area - a.area)[0];
+            if (pick) { T.first = pick.h; this.log(`[stream] első ablak: ${path.basename(pick.exe)}`); }
+          }
+          const f = T.first && w.list.find((x) => x.h === T.first);
+          if (f) { target = f; state = inDir(f) ? 'game' : 'launcher'; }
+          else if (T.first) { T.phase = 'game'; this.log('[stream] az első ablak bezárult – a játék ablakát keresem'); }
+        }
+        if (T.phase === 'game' && !target) {
+          const g = w.list.filter((x) => inDir(x));
+          target = g.find((x) => x.h === w.fg) || g.sort((a, b) => b.area - a.area)[0] || null;
+          if (target) state = 'game';
+        }
+        // MS Store játék: nincs maszk (teljes képernyő); ha 3 perc alatt sincs mit mutatni: teljes képernyő (kezelhető legyen)
+        let mask;
+        if (T.ms || (!target && Date.now() - T.start > 180000)) { mask = null; state = target ? state : 'full'; }
+        else if (!target) mask = { black: true };
+        else {
+          const x = Math.max(0, target.l), y = Math.max(0, target.t), r = Math.min(w.sw, target.r), b = Math.min(w.sh, target.b);
+          mask = (r - x) * (b - y) >= w.sw * w.sh * 0.97 ? null : { x: x / w.sw, y: y / w.sh, w: Math.max(0, r - x) / w.sw, h: Math.max(0, b - y) / w.sh };
+        }
+        const key = JSON.stringify(mask === undefined ? 'u' : mask);
+        if (key !== T.maskKey) { T.maskKey = key; if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:mask', mask); }
+        if (state !== T.state) { T.state = state; if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:gstate', { phase: state, name: game.name }); }
+      }
+      T.timer = setTimeout(tick, 600);
+    };
+    tick();
+  }
+  stopTracker() {
+    if (this.tracker) { clearTimeout(this.tracker.timer); this.tracker = null; }
+    if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:mask', null);
+  }
+  endGame(reason) {
+    this.log(`[stream] ${reason} – a stream bezárul`);
+    if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:gstate', { phase: 'ended', reason });
+    this.stopTracker();
+    setTimeout(() => this.stop(reason), 1500);
+  }
 
   // Kliens ajánlat (SDP) → válasz. opts: { sdp, width, height, fps, bitrate (kbps) }
   async offer(opts, client = '?') {
@@ -114,6 +213,10 @@ class StreamHost {
     });
     if (answer.error) throw new Error(answer.error);
     this.active = { client, since: Date.now(), stats: null };
+    // játék stream: ablakkövetés (asztal módban nincs – ott mindig teljes képernyő)
+    if (opts.game && opts.game.id && this.resolveGame) {
+      this.resolveGame(String(opts.game.id)).then((g) => { if (this.active) this.startTracker({ id: String(opts.game.id), game: g, resume: !!opts.game.resume }); }).catch(() => {});
+    } else this.stopTracker();
     this.log(`[stream] kapcsolat: ${client} · ${params.width}x${params.height}@${params.fps} · ${params.bitrate} kbps · UDP ${this.udp.port}`);
     const udpRef = this.udp;
     setTimeout(() => {
@@ -177,6 +280,7 @@ class StreamHost {
   }
 
   stop(reason = 'leállítva') {
+    this.stopTracker();
     if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:stop');
     this.stopUdp();
     this.releaseAll();

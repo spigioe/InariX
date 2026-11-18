@@ -346,7 +346,7 @@ function settingsCategories() {
         { type: 'action', label: 'Tűzfal engedélyezése', desc: 'Hogy a laptop megtalálja és elérje ezt a gépet (rendszergazdai jóváhagyás)', run: async () => { await gamo.firewall(); toast('Tűzfal szabályok létrehozva', 'ok'); } },
         { type: 'action', label: 'Távoli elérés VPN-nel', desc: 'Játék otthonon kívülről is (Tailscale / ZeroTier / WireGuard) – súgó', value: () => '?', run: () => vpnHelp() },
         { group: 'Egyedi játékok' },
-        { type: 'action', label: 'Egyedi játék hozzáadása (.exe)', run: addCustomGame },
+        { type: 'action', label: 'Játékok kezelése (keresés, hozzáadás, kizárás)', run: () => gamesManager() },
         ...hm.customGames.map((g, i) => ({ type: 'action', label: `• ${g.name}`, value: () => g.exe, run: async () => {
           if (await confirmBox(g.name, `${g.exe}\n\nEltávolítod a listából?`, 'Eltávolítás')) { await save({ hostMode: { customGames: hm.customGames.filter((_, j) => j !== i) } }); loadLibrary(true); }
         } })),

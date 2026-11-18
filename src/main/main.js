@@ -168,7 +168,10 @@ function reportUpdateResult() {
 }
 const streamEngine = () => (cfg.get().stream.engine || 'builtin');
 function getStreamHost() {
-  if (!streamHost) streamHost = new StreamHost(log);
+  if (!streamHost) {
+    streamHost = new StreamHost(log);
+    streamHost.resolveGame = async (id) => (await scanAll({ customGames: cfg.get().hostMode.customGames })).find((g) => g.id === id) || null;
+  }
   return streamHost;
 }
 
@@ -342,6 +345,7 @@ async function applyHostMode() {
   if (agent) { await agent.stop().catch(() => {}); agent = null; }
   if (!hm.enabled) return { running: false };
   agent = createAgent(() => cfg.get().hostMode, log, {
+    custom: (change) => { cfg.update({ hostMode: change }); return { count: change.customGames.length }; },
     stats: () => library.stats,
     updateBuild: () => { try { return JSON.parse(fs.readFileSync(path.join(app.getAppPath(), 'dist', 'update-manifest.json'), 'utf8')).build; } catch { return null; } },
     accounts: {
@@ -353,6 +357,7 @@ async function applyHostMode() {
       // laptop csatlakozásakor a host InariX ablaka eltűnik, hogy ne takarja a játékot a streamben
       offer: async (body, client) => { const r = await getStreamHost().offer(body, client); hideConsole(); return r; },
       stop: (reason) => { if (streamHost) streamHost.stop(reason); },
+      prepare: (g) => getStreamHost().prepareLaunch(g),
       status: () => (streamHost ? streamHost.status() : { available: true, vigem: null, active: false }),
     },
   });
@@ -595,6 +600,27 @@ function registerIpc() {
   });
   handle('store-details', (appid) => library.storeDetails(String(appid).replace(/\D/g, '')));
   handle('stop-stream', () => { if (streaming) streaming.proc.kill(); });
+  // Játékok keresése / hozzáadása / kizárása – ezen a gépen vagy a gaming PC-n (az agenten át)
+  handle('games-discover', async (hostId) => {
+    const h = getHost(hostId);
+    if (h.local) return require('../core/discover-games').discoverOnThisPc(cfg.get().hostMode);
+    return (await agentRequest(h, 'GET', '/api/discover', null, 120000)).games || [];
+  });
+  handle('games-custom', async (hostId, change) => {
+    const h = getHost(hostId);
+    if (h.local) { cfg.update({ hostMode: require('../core/discover-games').applyCustomChange(cfg.get().hostMode, change) }); return { ok: true }; }
+    return agentRequest(h, 'POST', '/api/custom', change, 20000);
+  });
+  handle('games-custom-list', async (hostId) => {
+    const h = getHost(hostId);
+    if (h.local) { const c = cfg.get().hostMode; return { customGames: c.customGames || [], excludedExes: c.excludedExes || [] }; }
+    return agentRequest(h, 'POST', '/api/custom', {}, 20000);
+  });
+  handle('pick-exe', async () => {
+    const { dialog } = require('electron');
+    const r = await dialog.showOpenDialog(win, { title: 'Játék .exe fájlja', properties: ['openFile'], filters: [{ name: 'Program', extensions: ['exe'] }] });
+    return r.canceled ? null : r.filePaths[0];
+  });
   handle('install', async (hostId, item) => {
     const h = getHost(hostId);
     if (h.local) return installGame(item);

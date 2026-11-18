@@ -73,6 +73,8 @@ function createAgent(getConfig, log = console.log, opts = {}) {
         if (already.length) { log(`[agent] folytatás (már fut): ${g.name}`); return send(200, { ok: true, alreadyRunning: true, since: already[0].since }); }
         log(`[agent] indítás: ${g.name}`);
         runCache.at = 0;
+        // a stream ablakkövetőjének: a már nyitott ablakok pillanatképe az indítás előtt
+        if (opts.stream && opts.stream.prepare) await Promise.race([opts.stream.prepare(g), new Promise((r) => setTimeout(r, 2500))]).catch(() => {});
         return send(200, launchGame(g, body.args));
       }
       if (url.pathname === '/api/running') {
@@ -85,6 +87,19 @@ function createAgent(getConfig, log = console.log, opts = {}) {
         log(`[agent] kilépés a játékból: ${g.name}`);
         runCache.at = 0;
         return send(200, await quitGame(g));
+      }
+      // játékkeresés ezen a gépen (launcher nélküli játékok), és az egyedi játéklista módosítása
+      if (url.pathname === '/api/discover') {
+        log('[agent] játékkeresés a gépen…');
+        return send(200, { games: await require('./discover-games').discoverOnThisPc(getConfig()) });
+      }
+      if (url.pathname === '/api/custom' && req.method === 'POST') {
+        if (!opts.custom) return send(501, { error: 'Nem támogatott' });
+        const r = require('./discover-games').applyCustomChange(getConfig(), body);
+        opts.custom(r);
+        cache.at = 0;
+        log(`[agent] játéklista módosítva (+${(body.add || []).length}, kizárva ${(body.exclude || []).length})`);
+        return send(200, { ok: true, ...r });
       }
       if (url.pathname === '/api/install' && req.method === 'POST') {
         log(`[agent] telepítés: ${body.store}:${body.storeId} ${body.name || ''}`);

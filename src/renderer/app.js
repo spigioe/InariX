@@ -247,50 +247,109 @@ function artScore(x, tr) {
   if (!x.r) return 0.5; // még ismeretlen arány: közepes jelölt, a betöltés után pontosítunk
   return Math.abs(Math.log(x.r / tr));
 }
-function applyArt(tile) {
+// Képek betöltése és dekódolása egyszer (gyorsítótárban) – a csempén csak teljesen kész kép jelenik meg
+const ART_LOAD = new Map();
+function loadArt(src) {
+  if (!ART_LOAD.has(src)) {
+    ART_LOAD.set(src, new Promise((res, rej) => {
+      const im = new Image();
+      im.decoding = 'async';
+      im.onload = () => (im.decode ? im.decode().catch(() => {}) : Promise.resolve()).then(() => res({ w: im.naturalWidth, h: im.naturalHeight }));
+      im.onerror = () => { ART_BAD.add(src); rej(new Error('kép hiba')); };
+      im.src = src;
+    }));
+  }
+  return ART_LOAD.get(src);
+}
+// A csempe VÉGLEGES mérete (a kijelölt kezdőképernyős csempe szélesedése még csak most indul): egy átmenet nélküli
+// rejtett másolatot mérünk le – így az új kép már a nagyítás kezdetén megjelenik, nem utána
+function finalRatio(tile) {
+  if (tile.closest('#home-rows')) {
+    const c = document.createElement('div');
+    c.className = tile.className;
+    c.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;transition:none;animation:none;pointer-events:none';
+    tile.parentElement.append(c);
+    const w = c.offsetWidth, hh = c.offsetHeight;
+    c.remove();
+    if (w && hh) return w / hh;
+  }
+  return tile.clientWidth && tile.clientHeight ? tile.clientWidth / tile.clientHeight : 0;
+}
+function pickArt(item, tr) {
+  const list = artCandidates(item);
+  let best = null, bs = Infinity;
+  for (const x of list) { const sc = artScore(x, tr); if (sc < bs) { bs = sc; best = x; } }
+  return best ? { best, fit: bs > 0.22 } : null;
+}
+// az összes képváltozat előtöltése (amint a csempe látható) – a váltás így azonnali
+function preloadArt(tile) {
+  const st = tile._art;
+  if (!st || st.pre) return;
+  st.pre = true;
+  for (const x of artCandidates(st.item)) {
+    loadArt(x.src).then((d) => { if (!x.r && !x.hero) ART_RATIO.set(x.src, d.w / d.h); }).catch(() => {});
+    if (x.logo) loadArt(x.logo).catch(() => {});
+  }
+}
+async function applyArt(tile, ratio) {
   const st = tile._art;
   if (!st || !tile.isConnected) return;
-  const w = tile.clientWidth, hgt = tile.clientHeight;
-  if (!w || !hgt) return;
-  const tr = w / hgt;
-  const list = artCandidates(st.item);
-  if (!list.length) { st.fallback(); return; }
-  let best = list[0], bs = Infinity;
-  for (const x of list) { const sc = artScore(x, tr); if (sc < bs) { bs = sc; best = x; } }
-  const fit = bs > 0.22; // ~25%-nál nagyobb eltérés: nem vágjuk, hanem elmosott háttéren egészben mutatjuk
-  tile.classList.toggle('fit', fit);
-  if (st.cur === best.src) return;
-  st.cur = best.src;
-  const pre = new Image();
-  pre.onload = () => {
-    if (st.cur !== best.src) return;
-    if (!best.r && !best.hero) { best.r = pre.naturalWidth / pre.naturalHeight; ART_RATIO.set(best.src, best.r); st.cur = null; }
-    st.img.src = best.src; st.bg.src = best.src;
-    tile.classList.toggle('hero', !!best.hero);
-    if (best.hero) st.logo.src = best.logo;
-    if (!st.cur) applyArt(tile); // a mért arány alapján újraválaszt
-  };
-  pre.onerror = () => { ART_BAD.add(best.src); if (st.cur === best.src) { st.cur = null; applyArt(tile); } };
-  pre.src = best.src;
+  const tr = ratio || finalRatio(tile);
+  if (!tr) return;
+  const token = ++st.token;
+  for (let guard = 0; guard < 10; guard++) {
+    const pk = pickArt(st.item, tr);
+    if (!pk) { st.fallback(); return; }
+    const { best, fit } = pk;
+    if (st.cur === best.src && st.fit === fit) return; // már ez látszik
+    try {
+      const dim = await loadArt(best.src);
+      if (!best.r && !best.hero && !ART_RATIO.has(best.src)) { ART_RATIO.set(best.src, dim.w / dim.h); continue; }
+      if (best.hero) await loadArt(best.logo).catch(() => { throw new Error('logó'); });
+    } catch { continue; }
+    if (token !== st.token || !tile.isConnected) return;
+    showArt(tile, best, fit);
+    return;
+  }
 }
+// új képréteg áttűnéssel a régi fölé (a régi a beúszás után eltűnik)
+function showArt(tile, best, fit) {
+  const st = tile._art;
+  const layer = h('div', { class: `art-layer${fit ? ' fit' : ''}${best.hero ? ' hero' : ''}${st.layer ? '' : ' first'}` },
+    fit && !best.hero ? h('img', { class: 'art-bg', src: best.src, alt: '', draggable: 'false' }) : null,
+    h('img', { class: 'art', src: best.src, alt: '', draggable: 'false' }),
+    best.hero ? h('img', { class: 'art-logo', src: best.logo, alt: '', draggable: 'false' }) : null);
+  const old = st.layer;
+  if (old) old.after(layer); else tile.prepend(layer);
+  st.layer = layer; st.cur = best.src; st.fit = fit;
+  requestAnimationFrame(() => requestAnimationFrame(() => layer.classList.add('in')));
+  if (old) setTimeout(() => old.remove(), 420);
+}
+let artIO = null, artRO = null;
 function coverEl(item, cls = 'tile') {
   const tile = h('div', { class: cls });
   const fallback = () => {
-    tile.querySelectorAll('img').forEach((i) => i.remove());
+    tile.querySelectorAll('.art-layer').forEach((x) => x.remove());
     tile._art = null;
     if (tile.querySelector('.ph')) return;
     const ini = (item.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
     tile.prepend(h('div', { class: 'ph' }, h('div', { class: 'ini' }, ini), item.name));
   };
   if (!artCandidates(item).length) { fallback(); return tile; }
-  const bg = h('img', { class: 'art-bg', alt: '', draggable: 'false' });
-  const img = h('img', { class: 'art', alt: '', draggable: 'false' });
-  const logo = h('img', { class: 'art-logo', alt: '', draggable: 'false' });
-  logo.addEventListener('error', () => { ART_BAD.add(logo.src); tile._art && (tile._art.cur = null); applyArt(tile); });
-  tile.append(bg, img, logo);
-  tile._art = { item, bg, img, logo, cur: null, fallback };
-  if (!artObserver) artObserver = new ResizeObserver((ents) => { for (const e of ents) applyArt(e.target); });
-  artObserver.observe(tile);
+  tile._art = { item, cur: null, fit: null, token: 0, layer: null, pre: false, timer: 0, fallback };
+  if (!artIO) {
+    artIO = new IntersectionObserver((ents) => { for (const e of ents) if (e.isIntersecting) { preloadArt(e.target); applyArt(e.target); } }, { rootMargin: '300px' });
+    // egyéb méretváltozás (ablak, téma): a végleges méretre, kis késleltetéssel
+    artRO = new ResizeObserver((ents) => { for (const e of ents) { const st = e.target._art; if (!st || !st.layer) continue; clearTimeout(st.timer); st.timer = setTimeout(() => applyArt(e.target), 300); } });
+  }
+  artIO.observe(tile); artRO.observe(tile);
+  // kijelölés / kijelölés megszűnése: azonnal a végleges alakhoz illő kép (a nagyítással együtt úszik be)
+  new MutationObserver(() => {
+    const f = tile.classList.contains('focused');
+    if (f === tile._artFocused) return;
+    tile._artFocused = f;
+    if (tile._art && tile._art.layer) applyArt(tile);
+  }).observe(tile, { attributes: true, attributeFilter: ['class'] });
   return tile;
 }
 
@@ -564,7 +623,7 @@ async function play(e, hostId) {
       // játékonkénti beállítások: felbontás és vezérlés (kontroller vagy egér mód)
       const pf = r.prefs || {};
       const pr = pf.preset && STREAM_PRESETS[pf.preset] ? { width: STREAM_PRESETS[pf.preset][0], height: STREAM_PRESETS[pf.preset][1], fps: STREAM_PRESETS[pf.preset][2] } : {};
-      await startBuiltin(r.hostId, { ...pr, desktop: pf.input === 'mouse', game: { key: e.key, name: e.name, hostId: r.hostId } });
+      await startBuiltin(r.hostId, { ...pr, desktop: pf.input === 'mouse', game: { key: e.key, name: e.name, hostId: r.hostId, gameId: r.gameId, resume: !!r.alreadyRunning } });
     }
     else launchText(`Csatlakozás a streamhez: ${r.hostName}…`);
   } catch (err) {
@@ -949,15 +1008,77 @@ async function manualHost() {
 }
 
 // ---------------- Beállítások: lásd settings.js ----------------
+// ---------------- Játékok hozzáadása / eltávolítása (egyszerűen) ----------------
+// A launcherek (Steam, Epic, GOG, Ubisoft, MS Store) játékai maguktól megjelennek; ez a többiekhez kell.
+const machines = () => S.lib.hosts.filter((x) => x.local || x.online);
+const mName = (x) => (x.local ? 'ez a gép' : x.name);
+
+// Keresés minden gépen, és minden talált játék azonnal bekerül (amit nem kérsz, a játék menüjéből eltávolíthatod)
+async function scanAndAddAll() {
+  const list = machines();
+  toast(`Játékok keresése: ${list.map(mName).join(', ')}…`, '', 30000);
+  let added = [];
+  await Promise.all(list.map(async (hst) => {
+    try {
+      const games = await gamo.gamesDiscover(hst.id);
+      if (games.length) await gamo.gamesCustom(hst.id, { add: games.map((g) => ({ name: g.name, exe: g.exe })) });
+      added = added.concat(games.map((g) => g.name));
+    } catch (e) { toast(`${mName(hst)}: ${e.message}`, 'err', 6000); }
+  }));
+  await refreshState();
+  await loadLibrary(true, true);
+  toast(added.length ? `${added.length} új játék: ${added.slice(0, 4).join(', ')}${added.length > 4 ? '…' : ''}` : 'Nem találtam új játékot – egyesével a „Játék hozzáadása” gombbal adhatsz hozzá', added.length ? 'ok' : '', 6000);
+}
+
+// Egyesével: (több gépnél gépválasztás) → .exe kiválasztása → kész (a név a mappából)
 async function addCustomGame() {
-  const name = await OSK.prompt({ title: 'Játék neve' });
-  if (!name) return;
-  const exe = await OSK.prompt({ title: 'Teljes útvonal az .exe fájlhoz (pl. D:\\Games\\X\\x.exe)' });
+  const list = machines();
+  let host = list.find((x) => x.local) || { id: 'local', local: true };
+  if (list.length > 1) {
+    const id = await modal({ title: 'Melyik gépen van a játék?', items: [...list.map((x) => ({ icon: x.local ? 'laptop' : 'desktop', label: x.local ? 'Ezen a gépen' : x.name, value: x.id })), { label: 'Mégse', value: null }] });
+    if (!id) return;
+    host = list.find((x) => x.id === id);
+  }
+  let exe = host.local ? await gamo.pickExe().catch(() => null) : await OSK.prompt({ title: `${host.name}: a játék .exe fájljának útvonala (pl. D:\\Games\\X\\x.exe)` });
   if (!exe) return;
-  const list = [...S.state.settings.hostMode.customGames, { id: Date.now().toString(36), name: name.trim(), exe: exe.trim().replace(/^"|"$/g, '') }];
-  await save({ hostMode: { customGames: list } });
-  toast('Hozzáadva a könyvtárhoz', 'ok');
-  loadLibrary(true);
+  exe = exe.trim().replace(/^"|"$/g, '');
+  if (!/\.exe$/i.test(exe)) { toast('Ez nem .exe fájl', 'err'); return; }
+  const parts = exe.split(/[\\/]/);
+  const name = (parts.length > 2 ? parts[parts.length - 2] : parts[parts.length - 1].replace(/\.exe$/i, '')).replace(/[_.]+/g, ' ').trim();
+  try {
+    await gamo.gamesCustom(host.id, { add: [{ name, exe }], unexclude: [exe] });
+    await refreshState();
+    await loadLibrary(true, true);
+    toast(`Hozzáadva: ${name} (átnevezés: a játék menüjében)`, 'ok', 5000);
+  } catch (e) { toast(e.message, 'err'); }
+}
+// a beállításokból
+async function gamesManager() {
+  const v = await modal({ title: 'Játékok', items: [{ icon: 'search', label: 'Játékok keresése', value: 'scan', kind: 'primary' }, { icon: 'download', label: 'Játék hozzáadása', value: 'add' }, { label: 'Bezárás', value: null }] });
+  if (v === 'scan') scanAndAddAll(); else if (v === 'add') addCustomGame();
+}
+// Eltávolítás a listából: a hozzáadott játék törlődik (a keresés sem hozza vissza), a többi elrejtésre kerül
+async function removeFromList(e) {
+  const custom = e.sources.filter((x) => x.gameId && x.gameId.startsWith('custom:'));
+  if (custom.length) {
+    for (const src of custom) await gamo.gamesCustom(src.hostId, { remove: [src.gameId.slice(7)] }).catch((err) => toast(err.message, 'err'));
+    await refreshState();
+    await loadLibrary(true, true);
+  } else await toggleHidden(e);
+  toast(`${e.name} eltávolítva a listából${custom.length ? '' : ' (a „Rejtett” kategóriából visszahozható)'}`, 'ok', 4000);
+}
+async function renameGame(e) {
+  const src = e.sources.find((x) => x.gameId && x.gameId.startsWith('custom:'));
+  if (!src) return;
+  const name = await OSK.prompt({ title: 'A játék neve', value: e.name });
+  if (!name || !name.trim()) return;
+  const r = await gamo.gamesCustomList(src.hostId).catch(() => null);
+  const g = r && (r.customGames || []).find((x) => String(x.id) === src.gameId.slice(7));
+  if (!g) return;
+  await gamo.gamesCustom(src.hostId, { remove: [String(g.id)], unexclude: [g.exe] });
+  await gamo.gamesCustom(src.hostId, { add: [{ name: name.trim(), exe: g.exe }], unexclude: [g.exe] });
+  await refreshState();
+  await loadLibrary(true, true);
 }
 
 async function showLog() {
