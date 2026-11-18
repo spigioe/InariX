@@ -95,12 +95,13 @@ function bgTrailer(e) {
   if (v) { v.classList.remove('on'); v.pause(); }
   document.body.classList.remove('vid-on');
   const mode = S.state.settings.ui.bgVideo || 'quiet';
-  if (!e || !v || mode === 'off' || S.tab !== 'home' || consoleHidden) return;
+  const busy = () => S.launching || (typeof StreamClient !== 'undefined' && StreamClient.active());
+  if (!e || !v || mode === 'off' || S.tab !== 'home' || consoleHidden || busy()) return;
   const sid = e.store === 'steam' ? e.storeId : e.artFromSteam;
   if (!sid) return;
   bgTrailer.t = setTimeout(async () => {
     const url = await gamo.trailer(sid).catch(() => null);
-    if (!url || S.focusedKey !== e.key || S.tab !== 'home' || consoleHidden) return;
+    if (!url || S.focusedKey !== e.key || S.tab !== 'home' || consoleHidden || busy()) return;
     v.src = url; v.muted = mode !== 'quiet'; v.volume = 0.15;
     const on = () => { v.classList.add('on'); document.body.classList.add('vid-on'); };
     v.play().then(on).catch(() => { v.muted = true; v.play().then(on).catch(() => {}); });

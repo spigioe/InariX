@@ -125,6 +125,20 @@ class StreamHost {
     }
   }
 
+  // Kontroller módban a gép egérkurzora a képernyő jobb alsó sarkán kívülre kerül (a nyíl nem látszik a képen),
+  // és az ablakra korlátozás is szünetel; egér módban a kurzor visszakerül a látható ablak közepére.
+  setCtrlMode(mouse) {
+    this.mouseMode = mouse;
+    const T = this.tracker;
+    if (!mouse) {
+      if (T && T.clipped) { this.send('CLIP'); T.clipped = false; }
+      this.send('MA 65535 65535');
+    } else if (T && T.lastRect) {
+      const r = T.lastRect;
+      this.send(`MA ${Math.round(((r.l + r.r) / 2 / r.sw) * 65535)} ${Math.round(((r.t + r.b) / 2 / r.sh) * 65535)}`);
+    }
+  }
+
   send(cmd) { if (this.inputd && this.inputd.stdin.writable) this.inputd.stdin.write(`${cmd}\n`); }
 
   // ---------- Játék-stream: csak a játék (vagy a launchere) ablaka látszik, a többi fekete ----------
@@ -221,11 +235,11 @@ class StreamHost {
           mask = (r - x) * (b - y) >= w.sw * w.sh * 0.97 ? null : { x: x / w.sw, y: y / w.sh, w: Math.max(0, r - x) / w.sw, h: Math.max(0, b - y) / w.sh };
         }
         // az egér a látható ablakon belül marad (a Windows feloldja ablakváltáskor, ezért minden körben újra beállítjuk)
-        if (target && mask) {
+        if (target && mask && this.mouseMode !== false) {
           const grp = allowed.filter((x) => x.pid === target.pid);
           const l = Math.max(0, Math.min(...grp.map((g) => g.l))), t = Math.max(0, Math.min(...grp.map((g) => g.t)));
           const r = Math.min(w.sw, Math.max(...grp.map((g) => g.r))), b = Math.min(w.sh, Math.max(...grp.map((g) => g.b)));
-          this.send(`CLIP ${l} ${t} ${r} ${b}`); T.clipped = true;
+          this.send(`CLIP ${l} ${t} ${r} ${b}`); T.clipped = true; T.lastRect = { l, t, r, b, sw: w.sw, sh: w.sh };
         } else if (T.clipped) { this.send('CLIP'); T.clipped = false; }
         const key = JSON.stringify(mask);
         if (key !== T.maskKey) { T.maskKey = key; if (this.win && !this.win.isDestroyed()) this.win.webContents.send('stream-host:mask', mask); }
@@ -393,6 +407,7 @@ class StreamHost {
       }
       case 'px': { const i = int(m.i, 0, 3); this.down.pads.delete(i); this.send(`PX ${i}`); break; }
       case 'reset': this.releaseAll(); break;
+      case 'cmode': this.setCtrlMode(!!m.mouse); break;
       default: break;
     }
   }

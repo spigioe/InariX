@@ -587,6 +587,7 @@ async function choosePrefer(e) {
 // ---------------- Indítás / stream ----------------
 function showLaunch(item, text) {
   S.launching = item; S.launchCancelled = false;
+  if (typeof bgTrailer === 'function') bgTrailer(null); // a háttérvideó a játék alatt ne szóljon
   const cover = $('#launch-cover');
   cover.removeAttribute('src');
   if (item.cover) { cover.src = item.cover; cover.onerror = () => { if (item.coverFallback && cover.src !== item.coverFallback) cover.src = item.coverFallback; }; }

@@ -45,6 +45,31 @@ const StreamClient = (() => {
     el.classList.toggle('show', !!txt);
     if (m.phase === 'ended') setTimeout(() => stop(m.reason || 'A játék bezárult'), 1200);
   }
+  // A Select (Back) és a Start lenyomását ~180 ms-ig visszatartjuk: ha közben a másik is jön, az a menü kombináció,
+  // és a játék egyiket sem kapja meg. Ha nem jön, a gomb továbbmegy (rövid koppintás: utólag, 80 ms-os nyomásként).
+  const HOLD_MS = 180;
+  const holdSt = new Map(); // pad → { [bit]: { since, sent, chord } }
+  const tapOut = new Map(); // pad → { bits, until } – utólag elküldött rövid koppintás
+  function holdMenuButtons(i, b, fwd, now) {
+    let hs = holdSt.get(i); if (!hs) { hs = {}; holdSt.set(i, hs); }
+    for (const bit of [XB.BACK, XB.START]) {
+      const down = !!(b & bit);
+      let h = hs[bit];
+      if (down && !h) h = hs[bit] = { since: now, sent: false, chord: false };
+      if (h && chordPads.has(i)) h.chord = true;
+      if (down) {
+        if (h.chord) fwd &= ~bit;
+        else if (!h.sent && now - h.since < HOLD_MS) fwd &= ~bit; // még várunk a másikra
+        else h.sent = true;
+      } else if (h) {
+        if (!h.sent && !h.chord) { const t = tapOut.get(i) || { bits: 0, until: 0 }; t.bits |= bit; t.until = now + 80; tapOut.set(i, t); }
+        delete hs[bit];
+      }
+    }
+    const t = tapOut.get(i);
+    if (t) { if (now < t.until) fwd |= t.bits; else tapOut.delete(i); }
+    return fwd;
+  }
   const sendFast = (m) => { if (fast && fast.readyState === 'open') fast.send(JSON.stringify(m)); };
   const sendRel = (m) => { if (rel && rel.readyState === 'open') rel.send(JSON.stringify(m)); };
   const on = (el, ev, fn, opt) => { el.addEventListener(ev, fn, opt); listeners.push([el, ev, fn, opt]); };
@@ -148,6 +173,7 @@ const StreamClient = (() => {
 
   function setMouseMode(on) {
     mouseMode = !!on;
+    sendRel({ t: 'cmode', mouse: mouseMode });
     // a virtuális kontroller állapotát nullázzuk, hogy ne maradjon lenyomva semmi
     for (const i of pads.keys()) sendRel({ t: 'px', i });
     pads.clear(); mm.held = {};
@@ -271,7 +297,8 @@ const StreamClient = (() => {
         // Select+Start kombináció: amíg mindkettő (vagy a kombó része) le van nyomva, a host nem kapja meg
         // (a hoston a Windows / launcherek ablakváltót nyitnának rá)
         if ((b & XB.BACK) && (b & XB.START)) chordPads.add(i); else if (!(b & (XB.BACK | XB.START))) chordPads.delete(i);
-        const fwd = b & ~XB.GUIDE & ~(chordPads.has(i) ? (XB.BACK | XB.START) : 0);
+        let fwd = b & ~XB.GUIDE & ~(chordPads.has(i) ? (XB.BACK | XB.START) : 0);
+        fwd = holdMenuButtons(i, b, fwd, performance.now());
         const ax = (n) => Math.round(Math.max(-1, Math.min(1, p.axes[n] || 0)) * 32767);
         const s = { t: 'p', i, b: fwd, lt: Math.round(((p.buttons[6] && p.buttons[6].value) || 0) * 255), rt: Math.round(((p.buttons[7] && p.buttons[7].value) || 0) * 255), lx: ax(0), ly: -ax(1), rx: ax(2), ry: -ax(3) };
         const key = JSON.stringify(s);
@@ -368,6 +395,7 @@ const StreamClient = (() => {
       else pc.addTransceiver('audio', { direction: 'recvonly' });
       fast = pc.createDataChannel('fast', { ordered: false, maxRetransmits: 0 });
       rel = pc.createDataChannel('rel', { ordered: true });
+      rel.addEventListener('open', () => sendRel({ t: 'cmode', mouse: mouseMode }));
       rel.onmessage = (m) => {
         let msg; try { msg = JSON.parse(m.data); } catch { return; }
         if (msg.t === 'vconf') setupDecoder(msg);
