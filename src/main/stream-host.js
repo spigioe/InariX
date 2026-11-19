@@ -366,6 +366,7 @@ class StreamHost {
   releaseAll() {
     for (const code of this.down.keys) { const k = KEYMAP[code]; if (k) this.send(`K ${k[0]} ${k[1] ? 1 : 0} 0`); }
     for (const b of this.down.buttons) this.send(`MB ${b} 0`);
+    if (this.down.vks) { for (const vk of this.down.vks) this.send(`KV ${vk} 0`); this.down.vks.clear(); }
     for (const i of this.down.pads) this.send(`PX ${i}`);
     this.down.keys.clear(); this.down.buttons.clear(); this.down.pads.clear();
   }
@@ -408,6 +409,13 @@ class StreamHost {
       case 'px': { const i = int(m.i, 0, 3); this.down.pads.delete(i); this.send(`PX ${i}`); break; }
       case 'reset': this.releaseAll(); break;
       case 'cmode': this.setCtrlMode(!!m.mouse); break;
+      case 'kv': { // különleges billentyű virtuális kóddal
+        const vk = Number(m.v) | 0;
+        if (vk < 3 || vk > 254) break; // 1–2: egérgombok – nem billentyű
+        if (m.d) this.down.vks = (this.down.vks || new Set()).add(vk); else if (this.down.vks) this.down.vks.delete(vk);
+        this.send(`KV ${vk} ${m.d ? 1 : 0}`);
+        break;
+      }
       default: break;
     }
   }

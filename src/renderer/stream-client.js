@@ -148,6 +148,7 @@ const StreamClient = (() => {
       items: [
         { icon: 'play', label: 'Folytatás', value: null, kind: 'primary' },
         { icon: mouseMode ? 'gamepad' : 'desktop', label: mouseMode ? 'Kontroller mód' : 'Egér és billentyűzet mód (Ⓧ: billentyűzet)', value: 'mouse' },
+        { icon: 'news', label: 'Különleges billentyűk (F1–F12, PrtSc, Pause, Home…)', value: 'fn' },
         { icon: 'toDesktop', label: 'Vissza az InariX-be', value: 'exit' },
         ...(game ? [{ icon: 'close', label: 'Kilépés a játékból', value: 'quit', kind: 'danger' }] : []),
       ],
@@ -169,6 +170,7 @@ const StreamClient = (() => {
       quitGameFlow(e, g.hostId, { confirm: false });
     }
     else if (v === 'mouse') { mousePicked = true; setMouseMode(!mouseMode); }
+    else if (v === 'fn') typeText('fn');
   }
 
   function setMouseMode(on) {
@@ -214,7 +216,7 @@ const StreamClient = (() => {
     el.classList.toggle('show', !!mouseMode && !(OSK.open && mm.typing));
   }
   // Billentyűzet: az InariX saját, lebegő billentyűzete – minden leütés azonnal a gépre megy; a jobb karral / egérrel mozgatható
-  async function typeText() {
+  async function typeText(startPage) {
     if (mm.typing) return;
     mm.typing = true; menuOpen = true;
     Nav.suspend(false); document.body.classList.add('stream-kbd');
@@ -223,8 +225,18 @@ const StreamClient = (() => {
       if (kind === 'char') sendRel({ t: 'text', s: ch });
       else if (kind === 'back') { sendRel({ t: 'k', c: 'Backspace', d: 1 }); sendRel({ t: 'k', c: 'Backspace', d: 0 }); }
       else if (kind === 'enter') { sendRel({ t: 'k', c: 'Enter', d: 1 }); sendRel({ t: 'k', c: 'Enter', d: 0 }); }
+      else if (kind === 'key') {
+        // kombináció: a módosítók le → a billentyű → a módosítók fel (Ctrl 0x11, Alt 0x12, Shift 0x10)
+        const md = ch.mods || {};
+        const MV = [['ctrl', 0x11], ['alt', 0x12], ['shift', 0x10]].filter(([k]) => md[k]);
+        for (const [, v] of MV) sendRel({ t: 'kv', v, d: 1 });
+        if (ch.vk) { sendRel({ t: 'kv', v: ch.vk, d: 1 }); sendRel({ t: 'kv', v: ch.vk, d: 0 }); }
+        else if (ch.code) { sendRel({ t: 'k', c: ch.code, d: 1 }); sendRel({ t: 'k', c: ch.code, d: 0 }); }
+        else if (ch.ch) sendRel({ t: 'text', s: ch.ch });
+        for (const [, v] of MV.reverse()) sendRel({ t: 'kv', v, d: 0 });
+      }
     };
-    await OSK.prompt({ title: 'Billentyűzet – a leütések azonnal a gépre mennek', live });
+    await OSK.prompt({ title: startPage === 'fn' ? 'Különleges billentyűk – azonnal a gépre mennek' : 'Billentyűzet – a leütések azonnal a gépre mennek', live, page: startPage || null });
     document.body.classList.remove('stream-kbd');
     Nav.suspend(true); menuOpen = false; waitRelease = true; mm.held = {}; mm.typing = false;
     mouseHints();

@@ -906,3 +906,16 @@ body[data-tile-in="none"] .tile .art-layer { transition: none; transform: none; 
 #stream-hints .hint b { font-size: .8em; }
 #stream-hints .hint b.btn-start { width: auto; min-width: 1.7em; padding: 0 .5em; border-radius: .5em; background: #3f3f46; }
 body.stream-menu #osk, body.stream-kbd #osk { z-index: 320; }
+/* képernyő-billentyűzet: a sorok mindig kitöltik a panelt, a billentyűk arányosan zsugorodnak (nem lóg ki semmi) */
+#osk-keys .krow { width: 100%; }
+#osk-keys:not(.num) .krow .key { flex: 1 1 0; min-width: 0; padding: 0 .2em; white-space: nowrap; overflow: hidden; }
+#osk-keys:not(.num) .krow .key.w2 { flex-grow: 1.7; }
+#osk-keys:not(.num) .krow .key.w4 { flex-grow: 5; }
+#osk-keys .key.mod { font-weight: 800; font-size: .9em; }
+#osk-keys .key.mod.primary { background: var(--grad); color: #fff; }
+#osk-keys.fn .krow .key { font-size: .95em; font-weight: 700; }
+#osk-keys .key.has-alt { position: relative; }
+#osk-keys .key.has-alt::after { content: ''; position: absolute; right: .35em; top: .3em; width: .3em; height: .3em; border-radius: 50%; background: currentColor; opacity: .35; }
+#osk-panel { position: relative; }
+.osk-alt { position: absolute; z-index: 5; display: flex; gap: .35em; padding: .45em; border-radius: calc(.8em * var(--rs)); background: var(--panel-solid); border: 1px solid var(--a2); box-shadow: 0 12px 40px rgba(0, 0, 0, .6); }
+.osk-alt .key { min-width: 2.7em; height: 2.7em; }

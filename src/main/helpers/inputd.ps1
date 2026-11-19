@@ -8,6 +8,7 @@
 #   MW dy dx      görgő (dy: függőleges, dx: vízszintes, 120 egység = 1 lépés)
 #   K sc ext d    billentyű scancode (hex nélkül, decimális), ext=1 kiterjesztett, d=1 le
 #   U cp          Unicode karakter (UTF-16 kódegység) leütése
+#   KV vk d       virtuális billentyűkód (különleges billentyűk: F1–F12, PrtSc, ScrLk, Pause, Ins, Home…), d=1 le
 #   P i btn lt rt lx ly rx ry   kontroller állapot (XUSB formátum)
 #   PX i          kontroller leválasztása
 #   WINS [mappa]  látható felső szintű ablakok (fizikai pixelben, gyártóval) + hány folyamat fut a mappából
@@ -63,6 +64,17 @@ namespace InariX {
       if (dx != 0) Send(Mouse(0, 0, (uint)dx, 0x1000));
     }
     // Unicode karakter (ékezetes betűk is, billentyűzetkiosztástól függetlenül)
+    [DllImport("user32.dll")] static extern uint MapVirtualKey(uint code, uint type);
+    public static void Vk(int vk, bool down) {
+      // kiterjesztett billentyűk: Ins, Del, Home, End, PgUp, PgDn, nyilak, PrtSc, jobb Ctrl / Alt
+      bool ext = vk == 0x2D || vk == 0x2E || vk == 0x24 || vk == 0x23 || vk == 0x21 || vk == 0x22 || (vk >= 0x25 && vk <= 0x28) || vk == 0x2C;
+      var inp = new INPUT[1];
+      inp[0].type = 1;
+      inp[0].u.ki.wVk = (ushort)vk;
+      inp[0].u.ki.wScan = (ushort)MapVirtualKey((uint)vk, 0);
+      inp[0].u.ki.dwFlags = (uint)((down ? 0 : 2) | (ext ? 1 : 0));
+      SendInput(1, inp, Marshal.SizeOf(typeof(INPUT)));
+    }
     public static void Unicode(int cp) {
       var d = new INPUT { type = 1 }; d.u.ki = new KEYBDINPUT { wScan = (ushort)cp, dwFlags = 0x0004 };
       var u = new INPUT { type = 1 }; u.u.ki = new KEYBDINPUT { wScan = (ushort)cp, dwFlags = 0x0004 | 0x0002 };
@@ -366,6 +378,7 @@ namespace InariX {
             case "MW": Input.Wheel(int.Parse(p[1]), int.Parse(p[2])); break;
             case "K": Input.Key(int.Parse(p[1]), p[2] == "1", p[3] == "1"); break;
             case "U": Input.Unicode(int.Parse(p[1])); break;
+            case "KV": Input.Vk(int.Parse(p[1]), p[2] == "1"); break;
             case "P": Vigem.Report(int.Parse(p[1]), int.Parse(p[2]), int.Parse(p[3]), int.Parse(p[4]), int.Parse(p[5]), int.Parse(p[6]), int.Parse(p[7]), int.Parse(p[8])); break;
             case "PX": Vigem.Unplug(int.Parse(p[1])); break;
             case "PING": lock (Vigem.OutLock) { Console.WriteLine("PONG"); Console.Out.Flush(); } break;

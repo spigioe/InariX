@@ -52,6 +52,18 @@ const KbLayout = (() => {
       const L = SWAP[active()];
       return L[e.code] || (e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : null);
     },
+    // karakter → fizikai billentyű kódja (Ctrl / Alt kombinációkhoz): a nyomtatott betű szerint az aktív kiosztásban
+    codeFor(ch) {
+      const c = String(ch || '').toLowerCase();
+      if (/^[0-9]$/.test(c)) return `Digit${c}`;
+      if (c === ' ') return 'Space';
+      const L = SWAP[active()];
+      for (const code of [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'].map((x) => `Key${x}`).concat(['Semicolon'])) {
+        const printed = L[code] || (code.startsWith('Key') ? code.slice(3).toLowerCase() : null);
+        if (printed === c) return code;
+      }
+      return null;
+    },
     oskRows() { return [...OSK[active()].map((r) => [...r]), SYM, ['␣', '✓']]; },
   };
 })();

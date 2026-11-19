@@ -163,7 +163,7 @@ const Nav = (() => {
   });
 
   // --- Gamepad ---
-  const BTN = { 0: 'a', 1: 'b', 2: 'x', 3: 'y', 4: 'lb', 5: 'rb', 8: 'select', 9: 'start', 12: 'up', 13: 'down', 14: 'left', 15: 'right', 16: 'guide' };
+  const BTN = { 0: 'a', 1: 'b', 2: 'x', 3: 'y', 4: 'lb', 5: 'rb', 6: 'lt', 7: 'rt', 8: 'select', 9: 'start', 12: 'up', 13: 'down', 14: 'left', 15: 'right', 16: 'guide' };
   const REPEAT = new Set(['up', 'down', 'left', 'right']);
   const held = {}; // action -> { since, last }
   let padConnected = false;
