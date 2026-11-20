@@ -1,6 +1,6 @@
 'use strict';
-// Képernyőkímélők: 20 vászon-alapú animáció a téma kiemelő színeivel (--a1, --a2), ~30 fps-sel (kímélő).
-// Saver.start(id | 'random', canvas) · Saver.stop() · Saver.LIST
+// Képernyőkímélők: vászon-alapú animációk (köztük zenére reagálók) a téma színeivel, ~30 fps-sel,
+// és jelenetek: háttér + szabadon elhelyezett, élő adatokat mutató komponensek.
 const Saver = (() => {
   const TAU = Math.PI * 2;
   const rnd = (a, b) => a + Math.random() * (b - a);
@@ -185,29 +185,187 @@ const Saver = (() => {
       c.lineWidth = 2;
       s.r = s.r.filter((q) => { q.r += dt * 0.08; const a = Math.max(0, 1 - q.r / (Math.min(w, h) * 0.35)); for (let k = 0; k < 3; k++) { c.strokeStyle = rgba(q.col, a * (1 - k * 0.3)); c.beginPath(); c.arc(q.x, q.y, Math.max(0, q.r - k * 14), 0, TAU); c.stroke(); } return a > 0; });
     } },
+    // ---------- zenére reagáló hátterek (s.au: a rendszerhang elemzése, lásd lent) ----------
+    { id: 'spectrum', name: 'Spektrum', music: true, init(s) { s.pk = new Float32Array(48); }, frame(c, w, h, t, dt, s) {
+      const a = s.au, n = a.bins.length, base = h * 0.8, bw = w / (n * 2 + 4);
+      c.fillStyle = 'rgba(0,0,0,.38)'; c.fillRect(0, 0, w, h);
+      const g = c.createRadialGradient(w / 2, base, 0, w / 2, base, w * 0.6); g.addColorStop(0, rgba(s.A, 0.05 + a.beat * 0.12)); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      for (let i = 0; i < n; i++) {
+        const v = a.bins[i], bh = Math.max(3, v * h * 0.62), col = mix(s.A, s.B, i / n);
+        s.pk[i] = Math.max(v, s.pk[i] - dt * 0.00035);
+        for (const side of [-1, 1]) {
+          const x = w / 2 + side * (i + 0.5) * bw - bw / 2;
+          const gg = c.createLinearGradient(0, base - bh, 0, base); gg.addColorStop(0, rgba(mix(col, [255, 255, 255], 0.35))); gg.addColorStop(1, rgba(col, 0.85));
+          c.fillStyle = gg; c.fillRect(x + 1, base - bh, bw - 2, bh);
+          c.fillStyle = rgba(col, 0.16); c.fillRect(x + 1, base + 4, bw - 2, bh * 0.35);
+          c.fillStyle = '#fff'; c.fillRect(x + 1, base - Math.max(3, s.pk[i] * h * 0.62) - 6, bw - 2, 3);
+        }
+      }
+    } },
+    { id: 'radial', name: 'Kör spektrum', music: true, init(s) { s.rot = 0; }, frame(c, w, h, t, dt, s) {
+      const a = s.au, n = a.bins.length, cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.17 * (1 + a.bass * 0.22 + a.beat * 0.08);
+      c.fillStyle = 'rgba(0,0,0,.3)'; c.fillRect(0, 0, w, h);
+      s.rot += dt * (0.00005 + a.level * 0.0004);
+      const g = c.createRadialGradient(cx, cy, R * 0.2, cx, cy, R * 2.2); g.addColorStop(0, rgba(s.B, 0.12 + a.beat * 0.25)); g.addColorStop(1, 'rgba(0,0,0,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h);
+      c.lineCap = 'round'; c.lineWidth = Math.max(2, (TAU * R) / (n * 2) * 0.55);
+      for (let i = 0; i < n * 2; i++) {
+        const k = i < n ? i : n * 2 - 1 - i, v = a.bins[k], ang = s.rot + (i / (n * 2)) * TAU, L = R * 0.08 + v * R * 1.5;
+        c.strokeStyle = rgba(mix(s.A, s.B, k / n), 0.9);
+        c.beginPath(); c.moveTo(cx + Math.cos(ang) * R, cy + Math.sin(ang) * R); c.lineTo(cx + Math.cos(ang) * (R + L), cy + Math.sin(ang) * (R + L)); c.stroke();
+      }
+      c.strokeStyle = rgba(mix(s.B, [255, 255, 255], 0.5), 0.6 + a.beat * 0.4); c.lineWidth = 2; c.beginPath(); c.arc(cx, cy, R * 0.94, 0, TAU); c.stroke();
+    } },
+    { id: 'scope', name: 'Oszcilloszkóp', music: true, init() {}, frame(c, w, h, t, dt, s) {
+      const a = s.au, d = a.wave, n = d.length;
+      c.fillStyle = 'rgba(0,0,0,.22)'; c.fillRect(0, 0, w, h);
+      c.save(); c.globalCompositeOperation = 'lighter';
+      for (let k = 0; k < 3; k++) {
+        c.strokeStyle = rgba(k === 1 ? s.B : s.A, k === 1 ? 0.9 : 0.35); c.lineWidth = k === 1 ? 2.5 : 7; c.shadowColor = rgba(s.B); c.shadowBlur = k === 1 ? 18 : 0;
+        c.beginPath();
+        for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * w, y = h / 2 + d[i] * h * (0.32 + a.beat * 0.08) + (k - 1) * 3; i ? c.lineTo(x, y) : c.moveTo(x, y); }
+        c.stroke();
+      }
+      c.restore();
+    } },
+    { id: 'beatburst', name: 'Ütemrobbanás', music: true, init(s) { s.p = []; s.lb = 0; }, frame(c, w, h, t, dt, s) {
+      const a = s.au, cx = w / 2, cy = h / 2;
+      c.fillStyle = 'rgba(0,0,0,.2)'; c.fillRect(0, 0, w, h);
+      if (a.beatAt !== s.lb) { s.lb = a.beatAt; const col = Math.random() < 0.5 ? s.A : s.B; for (let i = 0; i < 70; i++) { const an = rnd(0, TAU), v = rnd(0.1, 0.45) * (0.6 + a.bass); s.p.push({ x: cx, y: cy, vx: Math.cos(an) * v, vy: Math.sin(an) * v, life: 1, col, r: rnd(1.5, 4) }); } }
+      for (let i = 0; i < a.level * 6; i++) { const an = rnd(0, TAU), v = rnd(0.03, 0.12); s.p.push({ x: cx, y: cy, vx: Math.cos(an) * v, vy: Math.sin(an) * v, life: 0.7, col: s.B, r: 1.5 }); }
+      if (s.p.length > 1800) s.p.splice(0, s.p.length - 1800);
+      c.globalCompositeOperation = 'lighter';
+      s.p = s.p.filter((p) => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.985; p.vy *= 0.985; p.life -= dt * 0.0006; c.fillStyle = rgba(p.col, Math.max(0, p.life)); c.beginPath(); c.arc(p.x, p.y, p.r, 0, TAU); c.fill(); return p.life > 0; });
+      const g = c.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * (0.08 + a.bass * 0.12)); g.addColorStop(0, rgba(mix(s.B, [255, 255, 255], 0.6), 0.5 + a.beat * 0.5)); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+      c.globalCompositeOperation = 'source-over';
+    } },
+    { id: 'bassrings', name: 'Basszus gyűrűk', music: true, init(s) { s.r = []; s.lb = 0; }, frame(c, w, h, t, dt, s) {
+      const a = s.au, cx = w / 2, cy = h / 2, M = Math.hypot(w, h) * 0.6;
+      c.fillStyle = 'rgba(0,0,0,.25)'; c.fillRect(0, 0, w, h);
+      if (a.beatAt !== s.lb) { s.lb = a.beatAt; s.r.push({ r: 10, col: s.r.length % 2 ? s.A : s.B, wdt: 3 + a.bass * 10 }); }
+      s.r = s.r.filter((q) => { q.r += dt * (0.25 + a.level * 0.6); const al = Math.max(0, 1 - q.r / M); c.strokeStyle = rgba(q.col, al); c.lineWidth = q.wdt * al + 1; c.beginPath(); c.arc(cx, cy, q.r, 0, TAU); c.stroke(); return al > 0; });
+      const R = Math.min(w, h) * (0.05 + a.bass * 0.09);
+      const g = c.createRadialGradient(cx, cy, 0, cx, cy, R * 3); g.addColorStop(0, rgba(mix(s.A, [255, 255, 255], 0.4), 0.9)); g.addColorStop(0.35, rgba(s.A, 0.35)); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.beginPath(); c.arc(cx, cy, R * 3, 0, TAU); c.fill();
+    } },
+    { id: 'nebula', name: 'Lélegző köd', music: true, init(s) { s.b = Array.from({ length: 6 }, (_, i) => ({ ph: rnd(0, TAU), sp: rnd(0.00005, 0.00015), band: i % 3, col: i % 2 })); }, frame(c, w, h, t, dt, s) {
+      const a = s.au, bands = [a.bass, a.mid, a.high];
+      c.fillStyle = 'rgba(0,0,0,.18)'; c.fillRect(0, 0, w, h);
+      c.globalCompositeOperation = 'lighter';
+      for (const b of s.b) {
+        b.ph += dt * b.sp * (1 + a.level * 3);
+        const x = w / 2 + Math.cos(b.ph) * w * 0.28, y = h / 2 + Math.sin(b.ph * 1.3) * h * 0.25, r = Math.min(w, h) * (0.18 + bands[b.band] * 0.35);
+        const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(b.col ? s.A : s.B, 0.22 + bands[b.band] * 0.3)); g.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2);
+      }
+      c.globalCompositeOperation = 'source-over';
+    } },
+    { id: 'leds', name: 'LED hangszínszabályzó', music: true, init(s) { s.pk = new Float32Array(32); }, frame(c, w, h, t, dt, s) {
+      const a = s.au, cols = 32, rows = 18, gx = w * 0.08, gw = w * 0.84, cw = gw / cols, gh = h * 0.7, rh = gh / rows, top = h * 0.15;
+      c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
+      for (let i = 0; i < cols; i++) {
+        const v = a.bins[Math.floor((i / cols) * a.bins.length)], lit = Math.round(v * rows);
+        s.pk[i] = Math.max(lit, s.pk[i] - dt * 0.012);
+        for (let r = 0; r < rows; r++) {
+          const on = r < lit, peak = r === Math.round(s.pk[i]) && r > 0, col = r > rows * 0.8 ? [255, 70, 90] : mix(s.A, s.B, r / rows);
+          c.fillStyle = on || peak ? rgba(col, peak && !on ? 0.8 : 0.95) : rgba(col, 0.07);
+          c.fillRect(gx + i * cw + 2, top + gh - (r + 1) * rh + 2, cw - 4, rh - 4);
+        }
+      }
+    } },
   ];
 
+  // ================= Rendszerhang elemzés (zenére reagáló elemek) =================
+  // A rendszerhang „loopback” rögzítéséből számolt spektrum; ha nem elérhető, a lejátszás állapotából szimulált ütem.
+  const NB = 48;
+  const AU = { an: null, ctx: null, stream: null, live: false, pending: false, np: false, f: new Uint8Array(512), w: new Uint8Array(1024),
+    bins: new Float32Array(NB), wave: new Float32Array(256), bass: 0, mid: 0, high: 0, level: 0, beat: 0, beatAt: 0, avg: 0.1, ph: 0 };
+  async function audioOn() {
+    if (AU.an || AU.pending || !navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) return;
+    AU.pending = true;
+    try {
+      const st = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      st.getVideoTracks().forEach((x) => x.stop()); // csak a hang kell
+      if (!st.getAudioTracks().length || !AU.pending) { st.getTracks().forEach((x) => x.stop()); throw new Error('nincs hang'); }
+      AU.ctx = new AudioContext();
+      AU.an = AU.ctx.createAnalyser(); AU.an.fftSize = 1024; AU.an.smoothingTimeConstant = 0.72;
+      AU.ctx.createMediaStreamSource(st).connect(AU.an);
+      AU.stream = st; AU.live = true;
+    } catch { AU.live = false; } finally { AU.pending = false; }
+  }
+  function audioOff() {
+    AU.pending = false;
+    if (AU.stream) AU.stream.getTracks().forEach((x) => x.stop());
+    if (AU.ctx) AU.ctx.close().catch(() => {});
+    AU.stream = AU.ctx = AU.an = null; AU.live = false;
+  }
+  function audioTick(t, dt) {
+    const a = AU, decay = Math.pow(0.88, dt / 16);
+    let silent = true;
+    if (a.an) {
+      a.an.getByteFrequencyData(a.f); a.an.getByteTimeDomainData(a.w);
+      for (let i = 0; i < NB; i++) {
+        const lo = Math.floor(2 ** ((i * 8) / NB)), hi = Math.max(lo + 1, Math.floor(2 ** (((i + 1) * 8) / NB)));
+        let m = 0; for (let k = lo; k < hi; k++) m = Math.max(m, a.f[k]);
+        const v = Math.pow(m / 255, 1.6) * (1 + i / NB * 0.6);
+        a.bins[i] = Math.max(Math.min(1, v), a.bins[i] * decay);
+        if (m > 8) silent = false;
+      }
+      for (let i = 0; i < 256; i++) a.wave[i] = (a.w[i * 4] - 128) / 128;
+    }
+    if (!a.an || (silent && a.np)) {
+      // szimulált: ~120 BPM, ha szól valami; csendben halk alapmozgás
+      a.ph += dt * (a.np ? 0.0126 : 0.003);
+      const kick = a.np ? Math.pow(Math.max(0, Math.cos(a.ph)), 8) : 0, base = a.np ? 0.18 : 0.04;
+      for (let i = 0; i < NB; i++) {
+        const v = base + (0.5 - i / NB * 0.35) * (a.np ? 0.5 : 0.1) * (0.5 + 0.5 * Math.sin(t * 0.004 + i * 0.7) * Math.sin(t * 0.0017 - i * 0.3)) + (i < 8 ? kick * 0.6 : 0);
+        a.bins[i] = Math.max(Math.min(1, v), a.bins[i] * decay);
+      }
+      for (let i = 0; i < 256; i++) a.wave[i] = (Math.sin(i * 0.15 + t * 0.01) * 0.4 + Math.sin(i * 0.41 - t * 0.017) * 0.2) * (a.np ? 0.4 + kick * 0.6 : 0.08);
+    }
+    const avg = (x, y) => { let s = 0; for (let i = x; i < y; i++) s += a.bins[i]; return s / (y - x); };
+    a.bass = avg(0, 8); a.mid = avg(8, 28); a.high = avg(28, NB); a.level = avg(0, NB);
+    a.avg = a.avg * 0.96 + a.bass * 0.04;
+    if (a.bass > a.avg * 1.25 + 0.04 && a.bass > 0.18 && t - a.beatAt > 230) { a.beatAt = t; a.beat = 1; }
+    a.beat *= Math.pow(0.9, dt / 16);
+  }
+
   // ================= Jelenetek: háttér + élő adatokat mutató komponensek =================
-  // scene = { name, bg: kímélő id | 'black', widgets: [{ type, pos, size, anim, color, text? }] }
+  // scene = { id, name, bg: kímélő id | 'black', widgets: [{ type, x, y (0–100 %, a horgony), scale, align: l|c|r, anim, color, react, text? }] }
   const WIDGETS = {
     clock: { name: 'Óra' }, date: { name: 'Dátum' }, weather: { name: 'Időjárás' }, music: { name: 'Most szól' },
     hosts: { name: 'Gépek állapota' }, library: { name: 'Könyvtár (utoljára játszott)' }, news: { name: 'Játékhírek' },
     battery: { name: 'Akkumulátor' }, text: { name: 'Saját szöveg' }, cover: { name: 'Játékborító (váltakozó)' },
+    'viz-bars': { name: 'Zene: spektrum sáv', music: true }, 'viz-wave': { name: 'Zene: hullámforma', music: true },
+    'viz-ring': { name: 'Zene: lüktető albumborító', music: true }, 'viz-dots': { name: 'Zene: pontmátrix', music: true },
   };
-  const POS = { tl: 'Bal felső', tc: 'Fent középen', tr: 'Jobb felső', ml: 'Bal közép', mc: 'Közép', mr: 'Jobb közép', bl: 'Bal alsó', bc: 'Lent középen', br: 'Jobb alsó' };
-  const SIZE = { s: 'Kicsi', m: 'Közepes', l: 'Nagy', xl: 'Óriás' };
   const ANIM = { none: 'Nincs', drift: 'Lassú vándorlás', float: 'Lebegés', pulse: 'Lüktetés', fade: 'Elhalványuló', slide: 'Beúszás', glow: 'Ragyogás' };
   const COLOR = { theme: 'Téma színátmenet', white: 'Fehér', accent: 'Kiemelő szín', muted: 'Halvány' };
-  // beépített dinamikus jelenetek
+  const ALIGN = { l: 'Balra', c: 'Középre', r: 'Jobbra' };
+  // régi (rácsos) formátum → szabad elhelyezés
+  const POSXY = { tl: [5, 9, 'l'], tc: [50, 9, 'c'], tr: [95, 9, 'r'], ml: [5, 50, 'l'], mc: [50, 50, 'c'], mr: [95, 50, 'r'], bl: [5, 89, 'l'], bc: [50, 89, 'c'], br: [95, 89, 'r'] };
+  const SIZEK = { s: 0.75, m: 1, l: 1.35, xl: 1.85 };
+  function norm(w) {
+    if (w.x == null || w.y == null) { const p = POSXY[w.pos] || POSXY.mc; w.x = p[0]; w.y = p[1]; if (!w.align) w.align = p[2]; }
+    if (w.scale == null) w.scale = SIZEK[w.size] || 1;
+    if (!w.align) w.align = 'c';
+    delete w.pos; delete w.size;
+    return w;
+  }
+  const W = (type, x, y, scale, align, more = {}) => ({ type, x, y, scale, align, anim: 'none', color: 'white', ...more });
   const SCENES = [
-    { id: 'dyn-info', name: 'Információs pult', bg: 'aurora', widgets: [{ type: 'clock', pos: 'mc', size: 'xl', anim: 'float', color: 'theme' }, { type: 'date', pos: 'bc', size: 'm', anim: 'none', color: 'muted' }, { type: 'weather', pos: 'tr', size: 'm', anim: 'none', color: 'white' }, { type: 'music', pos: 'bl', size: 'm', anim: 'slide', color: 'white' }] },
-    { id: 'dyn-music', name: 'Zenelejátszó', bg: 'waves', widgets: [{ type: 'music', pos: 'mc', size: 'xl', anim: 'float', color: 'white' }, { type: 'clock', pos: 'tr', size: 's', anim: 'none', color: 'muted' }] },
-    { id: 'dyn-hosts', name: 'Gépek és hálózat', bg: 'network', widgets: [{ type: 'hosts', pos: 'mc', size: 'l', anim: 'none', color: 'white' }, { type: 'clock', pos: 'tl', size: 'm', anim: 'none', color: 'theme' }, { type: 'battery', pos: 'tr', size: 's', anim: 'none', color: 'muted' }] },
-    { id: 'dyn-library', name: 'Játékkönyvtár', bg: 'covers', widgets: [{ type: 'library', pos: 'bl', size: 'l', anim: 'slide', color: 'white' }, { type: 'clock', pos: 'tr', size: 'm', anim: 'none', color: 'white' }] },
-    { id: 'dyn-news', name: 'Játékhírek', bg: 'flow', widgets: [{ type: 'news', pos: 'mc', size: 'l', anim: 'fade', color: 'white' }, { type: 'clock', pos: 'tl', size: 'm', anim: 'none', color: 'theme' }, { type: 'date', pos: 'tr', size: 's', anim: 'none', color: 'muted' }] },
+    { id: 'dyn-info', name: 'Információs pult', bg: 'aurora', widgets: [W('clock', 50, 46, 1.85, 'c', { anim: 'float', color: 'theme' }), W('date', 50, 89, 1, 'c', { color: 'muted' }), W('weather', 95, 9, 1, 'r'), W('music', 5, 89, 1, 'l', { anim: 'slide' })] },
+    { id: 'dyn-hosts', name: 'Gépek és hálózat', bg: 'network', widgets: [W('hosts', 50, 50, 1.35, 'c'), W('clock', 5, 9, 1, 'l', { color: 'theme' }), W('battery', 95, 9, 0.75, 'r', { color: 'muted' })] },
+    { id: 'dyn-library', name: 'Játékkönyvtár', bg: 'covers', widgets: [W('library', 5, 80, 1.35, 'l', { anim: 'slide' }), W('clock', 95, 9, 1, 'r')] },
+    { id: 'dyn-news', name: 'Játékhírek', bg: 'flow', widgets: [W('news', 50, 50, 1.35, 'c', { anim: 'fade' }), W('clock', 5, 9, 1, 'l', { color: 'theme' }), W('date', 95, 9, 0.75, 'r', { color: 'muted' })] },
+    { id: 'dyn-music', name: 'Zenelejátszó', bg: 'waves', music: true, widgets: [W('music', 50, 50, 1.85, 'c', { anim: 'float', react: true }), W('clock', 95, 9, 0.75, 'r', { color: 'muted' })] },
+    { id: 'dyn-stage', name: 'Koncertszínpad', bg: 'spectrum', music: true, widgets: [W('viz-ring', 50, 38, 1.3, 'c'), W('music', 50, 66, 1.2, 'c'), W('clock', 5, 9, 0.9, 'l', { color: 'theme' })] },
+    { id: 'dyn-club', name: 'Klub', bg: 'beatburst', music: true, widgets: [W('clock', 50, 45, 1.85, 'c', { color: 'theme', react: true }), W('viz-wave', 50, 70, 1.2, 'c'), W('music', 5, 89, 0.9, 'l')] },
+    { id: 'dyn-studio', name: 'Stúdió', bg: 'nebula', music: true, widgets: [W('viz-bars', 50, 80, 1.6, 'c'), W('music', 5, 12, 1.2, 'l', { anim: 'slide' }), W('clock', 95, 12, 1.2, 'r', { color: 'theme' })] },
   ];
+  const needsAudio = (sc, bg) => !!((bg && bg.music) || (sc && (sc.widgets || []).some((w) => w.react || (WIDGETS[w.type] && WIDGETS[w.type].music))));
 
-  let wTimer = 0, layer = null, tick = 0;
+  let wTimer = 0, layer = null, tick = 0, editor = false;
   const wCache = {};
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   async function widgetHtml(w) {
@@ -224,7 +382,7 @@ const Saver = (() => {
           const x = wCache.wx; return x ? `<b class="sw-mid">${esc(x.icon)} ${esc(x.temp)}°</b><span class="sw-cap">${esc(x.city)}</span>` : '';
         }
         case 'music': {
-          const np = typeof nowPlayingAny === 'function' ? await nowPlayingAny().catch(() => null) : null;
+          const np = wCache.np;
           if (!np) return '<span class="sw-cap">Most nem szól semmi</span>';
           return `<div class="sw-np">${np.art ? `<img src="${esc(np.art)}" alt="">` : ''}<div><span class="sw-cap">${esc(np.src)}${np.playing ? '' : ' · szünetel'}</span><b class="sw-mid">${esc(np.title)}</b><span class="sw-sub">${esc(np.sub || '')}</span></div></div>`;
         }
@@ -251,59 +409,166 @@ const Saver = (() => {
           const g = L[Math.floor(tick / 2) % L.length];
           return `<img class="sw-cover" src="${esc(g.cover)}" alt=""><span class="sw-cap">${esc(g.name)}</span>`;
         }
+        case 'viz-bars': return '<canvas class="sw-viz sw-viz-bars" data-v="bars"></canvas>';
+        case 'viz-wave': return '<canvas class="sw-viz sw-viz-wave" data-v="wave"></canvas>';
+        case 'viz-dots': return '<canvas class="sw-viz sw-viz-dots" data-v="dots"></canvas>';
+        case 'viz-ring': {
+          const art = wCache.np && wCache.np.art;
+          return `<div class="sw-ring"><canvas class="sw-viz" data-v="ring"></canvas>${art ? `<img src="${esc(art)}" alt="">` : '<i class="sw-ring-ph">♪</i>'}</div>`;
+        }
         default: return '';
       }
     } catch { return ''; }
   }
-  async function renderWidgets(sc) {
-    if (!layer) return;
-    tick++;
-    const items = sc.widgets || [];
-    while (layer.children.length < items.length) layer.append(document.createElement('div'));
+  const ALG = { l: '0%', c: '-50%', r: '-100%' };
+  function place(el, w) {
+    el.style.left = `${w.x}%`; el.style.top = `${w.y}%`;
+    el.style.fontSize = `${(1.4 * (w.scale || 1)).toFixed(3)}cqw`;
+    el.style.transform = `translate(${ALG[w.align] || '-50%'}, -50%)`;
+    el.style.opacity = w.opacity != null ? String(w.opacity) : '';
+  }
+  // a komponensek elhelyezése (szinkron: a szerkesztő minden mozdulatnál hívja)
+  function layout() {
+    if (!layer || !scene) return;
+    const items = scene.widgets || [];
+    while (layer.children.length < items.length) { const o = document.createElement('div'); const a = document.createElement('div'); const c = document.createElement('div'); a.className = 'sw-a'; c.className = 'sw-c'; a.append(c); o.append(a); layer.append(o); }
     while (layer.children.length > items.length) layer.lastChild.remove();
-    await Promise.all(items.map(async (w, i) => {
+    items.forEach((w, i) => {
+      norm(w);
       const el = layer.children[i];
-      const cls = `sw sw-${w.type} sw-pos-${w.pos || 'mc'} sw-size-${w.size || 'm'} sw-anim-${w.anim || 'none'} sw-col-${w.color || 'white'}`;
+      const cls = `sw sw-${w.type} sw-al-${w.align} sw-col-${w.color || 'white'}${w.react ? ' sw-react' : ''}`;
       if (el.className !== cls) el.className = cls;
-      const html = await widgetHtml(w);
-      if (el._html !== html) { el._html = html; el.innerHTML = html; }
+      const an = `sw-a sw-anim-${w.anim || 'none'}`;
+      if (el.firstChild.className !== an) el.firstChild.className = an;
+      place(el, w);
+    });
+  }
+  async function renderWidgets() {
+    if (!layer || !scene) return;
+    tick++;
+    const sc = scene;
+    if (sc.widgets.some((w) => w.type === 'music' || w.type === 'viz-ring') || needsAudio(sc, cur)) {
+      wCache.np = typeof nowPlayingAny === 'function' ? await nowPlayingAny().catch(() => null) : null;
+      AU.np = !!(wCache.np && wCache.np.playing);
+    }
+    if (sc !== scene) return;
+    layout();
+    await Promise.all(sc.widgets.map(async (w, i) => {
+      let html = await widgetHtml(w);
+      if (!html && editor) html = `<span class="sw-cap sw-ph">${esc(WIDGETS[w.type] ? WIDGETS[w.type].name : w.type)} (most nincs adat)</span>`;
+      const el = layer.children[i] && layer.children[i].firstChild.firstChild;
+      if (el && el._html !== html) { el._html = html; el.innerHTML = html; }
     }));
+    if (onRender) onRender();
+  }
+  // zenére reagáló komponensek: képkockánként
+  function drawViz(t) {
+    if (!layer) return;
+    const a = AU;
+    for (const el of layer.children) {
+      const c = el.firstChild && el.firstChild.firstChild;
+      if (!c) continue;
+      if (el.classList.contains('sw-react')) c.style.transform = `scale(${(1 + a.bass * 0.14 + a.beat * 0.07).toFixed(3)})`;
+      else if (c.style.transform) c.style.transform = '';
+      for (const cv of c.querySelectorAll('canvas.sw-viz')) {
+        const k = Math.min(window.devicePixelRatio || 1, 1.5), cw = Math.round(cv.clientWidth * k), ch = Math.round(cv.clientHeight * k);
+        if (!cw || !ch) continue;
+        if (cv.width !== cw || cv.height !== ch) { cv.width = cw; cv.height = ch; }
+        const g = cv.getContext('2d'), A = state.A, B = state.B;
+        g.clearRect(0, 0, cw, ch);
+        const v = cv.dataset.v;
+        if (v === 'bars') {
+          const n = a.bins.length, bw = cw / n;
+          for (let i = 0; i < n; i++) { const bh = Math.max(ch * 0.04, a.bins[i] * ch); g.fillStyle = rgba(mix(A, B, i / n), 0.92); g.fillRect(i * bw + bw * 0.15, ch - bh, bw * 0.7, bh); }
+        } else if (v === 'wave') {
+          g.lineWidth = Math.max(2, ch * 0.05); g.strokeStyle = rgba(B); g.shadowColor = rgba(A); g.shadowBlur = ch * 0.15; g.beginPath();
+          for (let i = 0; i < a.wave.length; i++) { const x = (i / (a.wave.length - 1)) * cw, y = ch / 2 + a.wave[i] * ch * 0.45; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+          g.stroke();
+        } else if (v === 'dots') {
+          const cols = 24, rows = 8, dw = cw / cols, dh = ch / rows;
+          for (let i = 0; i < cols; i++) {
+            const lit = Math.round(a.bins[Math.floor((i / cols) * a.bins.length)] * rows);
+            for (let r = 0; r < rows; r++) { g.fillStyle = rgba(mix(A, B, r / rows), r < lit ? 0.95 : 0.08); g.beginPath(); g.arc(i * dw + dw / 2, ch - (r + 0.5) * dh, Math.min(dw, dh) * 0.36, 0, TAU); g.fill(); }
+          }
+        } else if (v === 'ring') {
+          const cx = cw / 2, cy = ch / 2, R = Math.min(cw, ch) * 0.33, n = a.bins.length;
+          g.lineCap = 'round'; g.lineWidth = Math.max(2, (TAU * R) / (n * 2) * 0.5);
+          for (let i = 0; i < n * 2; i++) {
+            const kk = i < n ? i : n * 2 - 1 - i, an = (i / (n * 2)) * TAU - Math.PI / 2, L = R * 0.05 + a.bins[kk] * R * 0.5;
+            g.strokeStyle = rgba(mix(A, B, kk / n), 0.95); g.beginPath(); g.moveTo(cx + Math.cos(an) * R * 1.04, cy + Math.sin(an) * R * 1.04); g.lineTo(cx + Math.cos(an) * (R * 1.04 + L), cy + Math.sin(an) * (R * 1.04 + L)); g.stroke();
+          }
+          const im = cv.nextElementSibling; if (im) im.style.transform = `translate(-50%, -50%) scale(${(1 + a.bass * 0.08 + a.beat * 0.05).toFixed(3)})`;
+        }
+      }
+    }
   }
 
-  let raf = 0, cur = null, state = null, last = 0, canvas = null, ctx = null, clockEl = null, scene = null;
+  let raf = 0, cur = null, state = null, last = 0, canvas = null, ctx = null, clockEl = null, scene = null, vw = 0, vh = 0, ro = null, onRender = null;
   function size() {
+    if (!canvas) return;
     const k = Math.min(window.devicePixelRatio || 1, 1.5);
-    canvas.width = Math.round(innerWidth * k); canvas.height = Math.round(innerHeight * k);
+    vw = canvas.clientWidth || innerWidth; vh = canvas.clientHeight || innerHeight;
+    const W2 = Math.round(vw * k), H2 = Math.round(vh * k);
+    if (canvas.width !== W2 || canvas.height !== H2) { canvas.width = W2; canvas.height = H2; if (ctx) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W2, H2); } if (cur && state) cur.init(state, vw, vh); }
   }
   function loop(ts) {
     raf = requestAnimationFrame(loop);
     if (ts - last < 32) return; // ~30 fps
     const dt = Math.min(80, last ? ts - last : 33);
     last = ts;
-    const k = canvas.width / innerWidth;
+    if (state.audio) audioTick(ts, dt);
+    const k = canvas.width / (vw || 1);
     ctx.setTransform(k, 0, 0, k, 0, 0);
-    try { cur.frame(ctx, innerWidth, innerHeight, ts, dt, state); } catch { /* egy kímélő hibája ne állítsa meg a többit */ }
+    try { cur.frame(ctx, vw, vh, ts, dt, state); } catch { /* egy kímélő hibája ne állítsa meg a többit */ }
+    if (state.audio) drawViz(ts);
     if (clockEl) clockEl.textContent = new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
   }
-  // id: kímélő id | dinamikus jelenet id | 'random' · vagy jelenet objektum (saját) · wl: a komponensek rétege
-  function start(id, cv, clock, wl) {
-    stop();
-    canvas = cv; ctx = canvas.getContext('2d'); clockEl = clock || null; layer = wl || null;
-    scene = typeof id === 'object' && id ? id : SCENES.find((x) => x.id === id) || null;
-    if (!scene && id === 'random' && Math.random() < SCENES.length / (SCENES.length + LIST.length)) scene = SCENES[Math.floor(Math.random() * SCENES.length)];
-    const bgId = scene ? scene.bg : id;
-    cur = bgId === 'black' ? { id: 'black', init() {}, frame(c, w, h) { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); } } : LIST.find((x) => x.id === bgId) || LIST[Math.floor(Math.random() * LIST.length)];
-    size();
-    state = { A: hexRgb(css('--a1', '#7c3aed')), B: hexRgb(css('--a2', '#22d3ee')) };
-    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    cur.init(state, innerWidth, innerHeight);
+  const BLACK = { id: 'black', name: 'Fekete', init() {}, frame(c, w, h) { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); } };
+  const findBg = (id) => (id === 'black' ? BLACK : LIST.find((x) => x.id === id));
+  function setBg(id) {
+    cur = findBg(id) || LIST[Math.floor(Math.random() * LIST.length)];
+    if (!state) return cur;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    cur.init(state, vw, vh);
+    syncAudio();
     if (clockEl) clockEl.classList.toggle('hidden', cur.id === 'clock' || !!scene);
-    if (layer) { layer.replaceChildren(); if (scene) { renderWidgets(scene); wTimer = setInterval(() => renderWidgets(scene), 5000); } }
-    last = 0;
-    raf = requestAnimationFrame(loop);
-    window.addEventListener('resize', size);
     return cur;
   }
-  function stop() { cancelAnimationFrame(raf); raf = 0; clearInterval(wTimer); wTimer = 0; window.removeEventListener('resize', size); state = null; if (layer) layer.replaceChildren(); }
-  return { LIST, SCENES, WIDGETS, POS, SIZE, ANIM, COLOR, start, stop };
+  function syncAudio() {
+    if (!state) return;
+    state.audio = needsAudio(scene, cur);
+    if (state.audio) audioOn(); else audioOff();
+  }
+  // id: kímélő id | jelenet id | 'random' · vagy jelenet objektum (saját) · wl: a komponensek rétege
+  // opts.editor: üres komponens helyén is látszik egy felirat (a szerkesztőben kijelölhető legyen); opts.onRender
+  function start(id, cv, clock, wl, opts = {}) {
+    stop();
+    canvas = cv; ctx = canvas.getContext('2d'); clockEl = clock || null; layer = wl || null; editor = !!opts.editor; onRender = opts.onRender || null;
+    scene = typeof id === 'object' && id ? id : SCENES.find((x) => x.id === id) || null;
+    if (!scene && id === 'random' && Math.random() < SCENES.length / (SCENES.length + LIST.length)) scene = SCENES[Math.floor(Math.random() * SCENES.length)];
+    if (scene) (scene.widgets || (scene.widgets = [])).forEach(norm);
+    state = { A: hexRgb(css('--a1', '#7c3aed')), B: hexRgb(css('--a2', '#22d3ee')), au: AU, audio: false };
+    size();
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    setBg(scene ? scene.bg : id);
+    if (layer) { layer.replaceChildren(); if (scene) { layout(); renderWidgets(); wTimer = setInterval(renderWidgets, 5000); } }
+    last = 0;
+    raf = requestAnimationFrame(loop);
+    ro = new ResizeObserver(() => size()); ro.observe(canvas);
+    return cur;
+  }
+  function stop() {
+    cancelAnimationFrame(raf); raf = 0; clearInterval(wTimer); wTimer = 0;
+    if (ro) { ro.disconnect(); ro = null; }
+    audioOff();
+    state = null; if (layer) layer.replaceChildren();
+    scene = null; onRender = null;
+  }
+  const isMusic = (id) => { const sc = SCENES.find((x) => x.id === id); const bg = findBg(id); return !!((sc && sc.music) || (bg && bg.music)); };
+  return {
+    LIST, SCENES, WIDGETS, ANIM, COLOR, ALIGN, norm, isMusic, needsAudio, start, stop, setBg, layout, syncAudio,
+    refresh: () => renderWidgets(),
+    el: (i) => (layer ? layer.children[i] : null),
+    audioLive: () => AU.live,
+  };
 })();

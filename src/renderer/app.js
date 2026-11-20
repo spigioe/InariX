@@ -1153,7 +1153,7 @@ function hideSaver() {
 }
 setInterval(() => {
   const min = S.state && S.state.settings.ui.screensaverMin;
-  if (!min || S.saver || S.launching || S.booting || document.hidden || (typeof Browser !== 'undefined' && Browser.blocksSaver())) return;
+  if (!min || S.saver || S.saverUi || S.launching || S.booting || document.hidden || (typeof Browser !== 'undefined' && Browser.blocksSaver())) return;
   if (Date.now() - S.lastInput > min * 60000) showSaver();
 }, 5000);
 

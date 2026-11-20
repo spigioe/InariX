@@ -1,5 +1,5 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, powerMonitor, powerSaveBlocker, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, screen, powerMonitor, powerSaveBlocker, shell, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -225,6 +225,13 @@ function createWindow() {
   });
   browser = setupBrowser({ getWin: () => win, sendUI, log, onWebview: (wc) => { if (accounts) accounts.attach(wc); } });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+  // a zenére reagáló képernyőkímélők a rendszerhangot elemzik (csak helyben, nem rögzítünk semmit);
+  // kizárólag a saját felületünk (file://) kapja meg – a webview-k külön munkamenetben futnak
+  win.webContents.session.setDisplayMediaRequestHandler((req, cb) => {
+    const origin = String(req.securityOrigin || (req.frame && req.frame.url) || '');
+    if (!origin.startsWith('file://')) { cb({}); return; }
+    desktopCapturer.getSources({ types: ['screen'] }).then((src) => cb(src[0] ? { video: src[0], audio: 'loopback' } : {})).catch(() => cb({}));
+  });
   win.on('close', (e) => { if (!app.isQuitting) { e.preventDefault(); hideConsole(); } });
   // kis méretben / rejtve a felület jelezze a rendererrel (a háttérvideó álljon meg)
   win.on('minimize', () => sendUI('hidden'));

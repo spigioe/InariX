@@ -1,6 +1,6 @@
 # InariX
 
-**Verzió: 0.9.14-alpha**
+**Verzió: 0.9.15-alpha**
 
 Konzolos felület Windows laptopra. A játékok egy erősebb gaming PC-n futnak, és a képük a laptopra streamelődik. Ha a gaming PC nem elérhető, a laptopon telepített játékok helyben is indíthatók.
 
