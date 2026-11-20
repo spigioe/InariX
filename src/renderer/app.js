@@ -1122,31 +1122,34 @@ function playBoot() {
 
 // ---------------- Képernyővédő ----------------
 function touch() { S.lastInput = Date.now(); }
-function showSaver() {
+// kind: kímélő / jelenet id, 'custom:<id>' (saját), jelenet objektum (előnézet) – alapból a beállított
+function saverScene(kind) {
+  const ui = (S.state && S.state.settings.ui) || {};
+  const k = kind || ui.saverKind || 'random';
+  if (typeof k === 'object') return k;
+  if (String(k).startsWith('custom:')) return (ui.customSavers || []).find((x) => `custom:${x.id}` === k) || 'random';
+  return k;
+}
+function showSaver(kind, onDone) {
   if (S.saver) return;
   S.saver = true;
+  S.saverDone = onDone || null;
   const el = $('#saver');
   el.classList.remove('hidden');
-  const box = $('.saver-box', el);
-  const upd = () => {
-    $('.saver-clock', el).textContent = new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
-    $('.saver-sub', el).textContent = new Date().toLocaleDateString('hu-HU', { weekday: 'long', month: 'long', day: 'numeric' });
-    box.style.left = `${10 + Math.random() * 55}%`;
-    box.style.top = `${10 + Math.random() * 60}%`;
-  };
-  upd();
-  S.saverTimer = setInterval(upd, 8000);
+  Saver.start(saverScene(kind), $('#saver-cv'), $('.saver-mini', el), $('#saver-widgets'));
   const all = {};
-  for (const k of ['a', 'b', 'x', 'y', 'lb', 'rb', 'up', 'down', 'left', 'right', 'start', 'select', 'guide']) all[k] = () => { hideSaver(); return true; };
+  for (const k of ['a', 'b', 'x', 'y', 'lb', 'rb', 'lt', 'rt', 'up', 'down', 'left', 'right', 'start', 'select', 'guide']) all[k] = () => { hideSaver(); return true; };
   Nav.push(() => el, all);
 }
 function hideSaver() {
   if (!S.saver) return;
   S.saver = false;
-  clearInterval(S.saverTimer);
+  Saver.stop();
   $('#saver').classList.add('hidden');
   Nav.pop();
   touch();
+  const d = S.saverDone; S.saverDone = null;
+  if (d) d();
 }
 setInterval(() => {
   const min = S.state && S.state.settings.ui.screensaverMin;

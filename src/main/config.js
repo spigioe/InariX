@@ -22,7 +22,7 @@ const DEFAULTS = () => ({
   },
   hostMode: { enabled: false, name: os.hostname(), port: 47800, token: newToken(), steamApiKey: '', customGames: [], excludedExes: [], sunshineUser: '', sunshinePass: '', allowStream: true, adminMode: false },
   setupDone: false,         // első indítás varázsló lefutott-e
-  ui: { sounds: true, bootAnimation: true, theme: 'aurora', accent: 'aurora', scale: 100, screensaverMin: 5, pinOrder: [], weatherCity: '', showDate: true, nightMode: false, hostNotify: true, rumble: true, reduceMotion: false, kbLayout: 'auto' },
+  ui: { sounds: true, bootAnimation: true, theme: 'aurora', accent: 'aurora', scale: 100, screensaverMin: 5, pinOrder: [], weatherCity: '', showDate: true, nightMode: false, hostNotify: true, rumble: true, reduceMotion: false, kbLayout: 'auto', saverKind: 'random', customSavers: [] },
   library: { preferLocal: false, showHidden: false, sort: 'recent', groupByHost: true, showOwned: true },
   stream: { mic: false, engine: 'builtin', preset: 'auto', bitrate: 0, vsync: true, hostSleepAfter: 0, wifiWarn: true, hdr: false, overlay: false, codec: 'auto' },
   account: { steamApiKey: '', steamId: '' },

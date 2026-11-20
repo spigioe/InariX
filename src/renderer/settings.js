@@ -283,7 +283,10 @@ function settingsCategories() {
       { group: 'Indulás és tétlenség' },
       { type: 'toggle', label: 'Boot animáció', get: () => s.ui.bootAnimation, set: (v) => ({ ui: { bootAnimation: v } }) },
       { type: 'action', label: 'Boot animáció lejátszása', run: () => playBoot() },
-      { type: 'select', label: 'Képernyővédő', options: [[0, 'Kikapcsolva'], [2, '2 perc'], [5, '5 perc'], [10, '10 perc'], [30, '30 perc']], get: () => s.ui.screensaverMin, set: (v) => ({ ui: { screensaverMin: Number(v) } }) },
+      { type: 'select', label: 'Képernyőkímélő indulása', options: [[0, 'Kikapcsolva'], [2, '2 perc'], [5, '5 perc'], [10, '10 perc'], [30, '30 perc']], get: () => s.ui.screensaverMin, set: (v) => ({ ui: { screensaverMin: Number(v) } }) },
+      { type: 'select', label: 'Képernyőkímélő', desc: 'Animációk, élő adatokat mutató jelenetek és a saját képernyőkímélőid', options: saverOptions(), get: () => s.ui.saverKind || 'random', set: (v) => ({ ui: { saverKind: v } }) },
+      { type: 'action', label: 'Képernyőkímélő szerkesztő', desc: 'Saját képernyőkímélő: háttér animáció + óra, időjárás, zene, gépek, hírek… pozícióval, mérettel, animációval', value: () => `${(s.ui.customSavers || []).length} saját`, run: () => saverEditor() },
+      { type: 'action', label: 'Képernyőkímélő előnézete', run: () => showSaver() },
       { type: 'action', label: 'Kontroller teszt', run: () => controllerTester() },
     ] },
 

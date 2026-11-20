@@ -207,6 +207,7 @@ async function exitMenu() {
       items: [
         { icon: 'toDesktop', label: 'Vissza a Windows asztalra (a háttérben fut tovább)', value: 'hide', kind: 'primary' },
         { icon: 'close', label: 'Kilépés az InariX-ből', value: 'quit' },
+        { icon: 'tv', label: 'Képernyőkímélő', value: 'saver' },
         { icon: 'sleep', label: 'Alvó mód', value: 'sleep' },
         { icon: 'logout', label: 'Kijelentkezés a Windowsból', value: 'logoff' },
         { icon: 'restart', label: 'Újraindítás', value: 'restart' },
@@ -216,6 +217,7 @@ async function exitMenu() {
     });
     if (!v) return;
     if (v === 'hide') return gamo.hide();
+    if (v === 'saver') { setTimeout(() => showSaver(), 250); return; }
     if (v === 'quit') {
       if (await confirmBox('Kilépés a InariXből', `A InariX teljesen bezárul${isLaptop ? ', a kijelző és fedél automatika leáll' : ''}. A Windows-zal együtt legközelebb újra elindul.`, 'Kilépés')) gamo.quit();
       return;
@@ -605,4 +607,89 @@ function setSleepTimer(min) {
   if (!min) { toast('Alvásidőzítő kikapcsolva'); return; }
   S.sleepTimer = setTimeout(() => { S.sleepMin = 0; toast('Alvásidőzítő: a gép alvó módba lép', '', 4000); setTimeout(() => gamo.sleep(), 4000); }, min * 60000);
   toast(`A gép ${min} perc múlva alvó módba lép`, 'ok');
+}
+
+// ================= Képernyőkímélők: választó és szerkesztő =================
+function saverOptions() {
+  const ui = (S.state && S.state.settings.ui) || {};
+  return [['random', 'Véletlen'], ...Saver.SCENES.map((x) => [x.id, `Élő adatok: ${x.name}`]), ...Saver.LIST.map((x) => [x.id, `Animáció: ${x.name}`]),
+    ...(ui.customSavers || []).map((x) => [`custom:${x.id}`, `Saját: ${x.name}`])];
+}
+const opts = (o) => Object.entries(o);
+async function saveSavers(list) { try { applyState(await gamo.settings({ ui: { customSavers: list } })); } catch (e) { toast(e.message, 'err'); } }
+
+async function saverEditor() {
+  const list = (S.state.settings.ui.customSavers || []);
+  const items = list.map((x) => ({ icon: 'tv', label: x.name, value: `e:${x.id}` }));
+  items.push({ icon: 'download', label: 'Új képernyőkímélő', value: 'new', kind: 'primary' });
+  items.push({ icon: 'layers', label: 'Új egy meglévő élő adatos alapján', value: 'copy' });
+  items.push({ label: 'Bezárás', value: null });
+  const v = await modal({ title: 'Képernyőkímélő szerkesztő', body: 'Háttér animáció + komponensek (óra, dátum, időjárás, most szól, gépek, könyvtár, hírek, akku, borító, saját szöveg), mindegyik pozícióval, mérettel, animációval és színnel.', items });
+  if (!v) return;
+  if (v === 'new') return editSaver({ id: Date.now().toString(36), name: 'Saját képernyőkímélő', bg: 'aurora', widgets: [{ type: 'clock', pos: 'mc', size: 'xl', anim: 'float', color: 'theme' }] }, true);
+  if (v === 'copy') {
+    const b = await modal({ title: 'Melyikből induljon?', items: [...Saver.SCENES.map((x) => ({ label: x.name, value: x.id })), { label: 'Mégse', value: null }] });
+    const src = Saver.SCENES.find((x) => x.id === b);
+    if (!src) return saverEditor();
+    return editSaver({ ...JSON.parse(JSON.stringify(src)), id: Date.now().toString(36), name: `${src.name} (saját)` }, true);
+  }
+  const it = list.find((x) => `e:${x.id}` === v);
+  if (it) return editSaver(JSON.parse(JSON.stringify(it)), false);
+}
+
+async function editSaver(sc, isNew) {
+  const node = h('div', { class: 'te-rows saver-ed' });
+  const rows = () => [
+    { type: 'text', label: 'Név', get: () => sc.name, set: (x) => { sc.name = x.trim() || sc.name; return true; } },
+    { type: 'select', label: 'Háttér', options: [['black', 'Fekete'], ...Saver.LIST.map((x) => [x.id, x.name])], get: () => sc.bg, set: (x) => { sc.bg = x; return true; } },
+    { group: `Komponensek (${sc.widgets.length})` },
+    ...sc.widgets.map((w, i) => ({ type: 'action', label: `${Saver.WIDGETS[w.type].name}${w.type === 'text' ? `: „${w.text || ''}”` : ''}`, value: () => `${Saver.POS[w.pos]} · ${Saver.SIZE[w.size]} · ${Saver.ANIM[w.anim]}`, run: async () => { await editWidget(sc, i); draw(); } })),
+    { type: 'action', label: 'Komponens hozzáadása', value: () => '+', run: async () => {
+      const t = await modal({ title: 'Komponens', items: [...opts(Saver.WIDGETS).map(([k, x]) => ({ label: x.name, value: k })), { label: 'Mégse', value: null }] });
+      if (t) { sc.widgets.push({ type: t, pos: 'mc', size: 'm', anim: 'none', color: 'white', text: t === 'text' ? 'InariX' : undefined }); await editWidget(sc, sc.widgets.length - 1); }
+      draw();
+    } },
+    { group: 'Műveletek' },
+    { type: 'action', label: 'Előnézet', desc: 'Bármelyik gomb: vissza a szerkesztőbe', run: () => preview() },
+  ];
+  const draw = () => renderRows(node, rows(), draw);
+  let resolveP = null;
+  const preview = () => { const m = $('#modal-layer .modal'); if (m) m.style.visibility = 'hidden'; showSaver(JSON.parse(JSON.stringify(sc)), () => { if (m) m.style.visibility = ''; requestAnimationFrame(() => Nav.focusFirst()); }); };
+  draw();
+  const v = await modal({ title: isNew ? 'Új képernyőkímélő' : sc.name, node, wide: true,
+    items: [{ label: 'Mentés', value: 'save', kind: 'primary' }, ...(isNew ? [] : [{ label: 'Törlés', value: 'del', kind: 'danger' }]), { label: 'Mégse', value: null }],
+    handlers: { left: () => rowCycle(-1, draw), right: () => rowCycle(1, draw) } });
+  void resolveP;
+  const list = [...(S.state.settings.ui.customSavers || [])];
+  if (v === 'save') {
+    const i = list.findIndex((x) => x.id === sc.id);
+    if (i >= 0) list[i] = sc; else list.push(sc);
+    await saveSavers(list);
+    if (isNew && await confirmBox('Mentve', `Legyen ez a képernyőkímélő: „${sc.name}”?`, 'Igen')) await save({ ui: { saverKind: `custom:${sc.id}` } });
+    else toast('Mentve', 'ok', 2000);
+  } else if (v === 'del' && await confirmBox('Törlés', `Törlöd: „${sc.name}”?`, 'Törlés')) {
+    await saveSavers(list.filter((x) => x.id !== sc.id));
+    if ((S.state.settings.ui.saverKind || '') === `custom:${sc.id}`) await save({ ui: { saverKind: 'random' } });
+  }
+  if (S.tab === 'settings') renderSettings();
+}
+
+async function editWidget(sc, i) {
+  const w = sc.widgets[i];
+  const node = h('div', { class: 'te-rows saver-ed' });
+  const rows = () => [
+    { type: 'select', label: 'Komponens', options: opts(Saver.WIDGETS).map(([k, x]) => [k, x.name]), get: () => w.type, set: (x) => { w.type = x; return true; } },
+    ...(w.type === 'text' ? [{ type: 'text', label: 'Szöveg', get: () => w.text || '', set: (x) => { w.text = x; return true; } }] : []),
+    { type: 'select', label: 'Pozíció', options: opts(Saver.POS), get: () => w.pos, set: (x) => { w.pos = x; return true; } },
+    { type: 'select', label: 'Méret', options: opts(Saver.SIZE), get: () => w.size, set: (x) => { w.size = x; return true; } },
+    { type: 'select', label: 'Animáció', options: opts(Saver.ANIM), get: () => w.anim, set: (x) => { w.anim = x; return true; } },
+    { type: 'select', label: 'Szín', options: opts(Saver.COLOR), get: () => w.color, set: (x) => { w.color = x; return true; } },
+  ];
+  const draw = () => renderRows(node, rows(), draw);
+  draw();
+  const v = await modal({ title: Saver.WIDGETS[w.type].name, node, wide: true,
+    items: [{ label: 'Kész', value: 'ok', kind: 'primary' }, { label: 'Feljebb', value: 'up' }, { label: 'Komponens törlése', value: 'del', kind: 'danger' }],
+    handlers: { left: () => rowCycle(-1, draw), right: () => rowCycle(1, draw) } });
+  if (v === 'del') sc.widgets.splice(i, 1);
+  else if (v === 'up' && i > 0) { const [x] = sc.widgets.splice(i, 1); sc.widgets.splice(i - 1, 0, x); }
 }
