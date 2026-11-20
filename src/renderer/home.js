@@ -227,8 +227,36 @@ function playRadio(st) {
 // a natív (nem webes) appok az Alkalmazások között
 const NATIVE_APPS = {
   browser: { title: 'Böngésző', sub: 'Web kontrollerrel', icon: 'browser', color: 'linear-gradient(135deg,#14b8a6,#0ea5e9)', run: () => Browser.showBrowser() },
+  netflix: { title: 'Netflix', sub: 'Filmek és sorozatok – Microsoft Edge-ben (DRM), kontrollerrel', icon: 'b-netflix', color: 'linear-gradient(135deg,#e50914,#7f0a10)', run: () => openWebApp('netflix') },
+  hbomax: { title: 'HBO Max', sub: 'Filmek és sorozatok – Microsoft Edge-ben (DRM), kontrollerrel', icon: 'b-hbomax', color: 'linear-gradient(135deg,#7c3aed,#1e1b4b)', run: () => openWebApp('hbomax') },
   radio: { title: 'Internetes rádió', sub: 'Magyar rádiók élőben', icon: 'radio', color: 'linear-gradient(135deg,#f59e0b,#b45309)', run: () => radioMenu() },
 };
+// DRM-es streaming appok: a gépen lévő Edge-ben (saját InariX profillal) futnak, a kontrollert a fő folyamat alakítja
+// egérré / billentyűkké. Közben az InariX felülete nem kezel bemenetet; Guide vagy View+Start: vissza.
+const WEBAPP_KEYS = [['A', 'Kattintás'], ['Bal kar', 'Egér'], ['Jobb kar', 'Görgetés'], ['B', 'Vissza'], ['X', 'Lejátszás / szünet'], ['Y', 'Billentyűzet (gépelés)'], ['Bal kar nyomás', 'Teljes képernyő'], ['D-pad', 'Nyilak'], ['≡', 'Enter'], ['LT / RT', 'Finom egér'], ['Guide', 'Vissza az InariX-be']];
+async function openWebApp(id) {
+  const a = NATIVE_APPS[id];
+  if (S.webapp) { toast('Már fut egy streaming app – Guide gombbal lépj vissza belőle', '', 4000); return; }
+  let cover = $('#webapp-cover');
+  if (!cover) { cover = h('div', { id: 'webapp-cover', class: 'hidden' }); document.body.append(cover); }
+  cover.replaceChildren(h('div', { class: 'wa-box' },
+    appIcon(id, 'big'), h('h1', {}, a.title), h('p', {}, 'Megnyílik a Microsoft Edge-ben (a filmek DRM védelme miatt), teljes képernyőn.'),
+    h('div', { class: 'wa-keys' }, WEBAPP_KEYS.map(([k, t]) => h('span', { class: 'hint' }, h('b', { class: 'kbd' }, k), ` ${t}`))),
+    h('button', { class: 'menu-item', onclick: () => gamo.webappClose() }, 'Bezárás és vissza az InariX-be')));
+  cover.classList.remove('hidden');
+  S.webapp = id;
+  Nav.suspend(true);
+  try { await gamo.webappOpen(id); } catch (e) { webAppClosed(); toast(e.message, 'err', 8000); }
+}
+function webAppClosed() {
+  if (!S.webapp) return;
+  S.webapp = null;
+  const c = $('#webapp-cover'); if (c) c.classList.add('hidden');
+  Nav.suspend(false);
+  S.lastInput = Date.now();
+}
+gamo.on('webapp:closed', () => webAppClosed());
+
 // app ikon: a design system vonalas ikonja az app saját színével, a téma panelszínén
 function appIcon(id, cls = '') {
   const a = (Browser.APPS && Browser.APPS[id]) || NATIVE_APPS[id] || {};
@@ -242,7 +270,7 @@ async function appsMenu(focusId) {
   const node = h('div', { class: `apps-list v-${view}` });
   let pick = null, toggle = false;
   const close = () => { const m = $('#modal-layer .menu-item:last-child'); if (m) m.click(); };
-  const all = [['browser', NATIVE_APPS.browser], ...Object.entries(Browser.APPS), ['radio', NATIVE_APPS.radio]];
+  const all = [['browser', NATIVE_APPS.browser], ...Object.entries(Browser.APPS), ['netflix', NATIVE_APPS.netflix], ['hbomax', NATIVE_APPS.hbomax], ['radio', NATIVE_APPS.radio]];
   for (const [id, a] of all) {
     node.append(h('button', { class: 'app-card focusable', dataset: { id, ...(id === (focusId || 'youtube') ? { default: '1' } : {}) }, onclick: () => { pick = id; close(); } },
       appIcon(id, view === 'grid' ? 'big' : ''), h('b', {}, a.title), view === 'card' ? h('small', {}, id === 'radio' && S.radio ? `Most: ${S.radio.name}` : a.sub || '') : null,

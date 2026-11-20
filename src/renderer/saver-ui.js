@@ -30,16 +30,15 @@ const SaverUI = (() => {
   // ================= Választó =================
   let P = null; // { root, list, stage, title, desc, timer, entry }
   function entries() {
-    const se = (x) => ({ key: x.id, name: x.name, scene: x, music: !!x.music, tag: 'ÉLŐ', desc: `${x.widgets.length} komponens · háttér: ${bgName(x.bg)}${x.music ? ' · reagál a zenére' : ''}` });
+    const se = (x) => ({ key: x.id, name: x.name, scene: x, music: !!x.music, tag: 'PRESET', desc: `${x.widgets.length} komponens · háttér: ${bgName(x.bg)}${x.music ? ' · reagál a zenére' : ''}` });
     const be = (x) => ({ key: x.id, name: x.name, music: !!x.music, desc: x.music ? 'Animáció, ami a gép hangjára reagál (Spotify, YouTube, rádió, játék – bármi, ami szól)' : 'Animáció a téma színeivel' });
     return [
       { group: null, items: [{ key: 'random', name: 'Véletlenszerű', desc: 'Minden alkalommal másik animáció vagy élő adatos jelenet' }] },
       { group: 'Saját', items: [...customs().map((x) => ({ key: `custom:${x.id}`, name: x.name, scene: x, custom: true, music: Saver.needsAudio(x, bgOf(x.bg)), tag: 'SAJÁT', desc: `${(x.widgets || []).length} komponens · háttér: ${bgName(x.bg)}` })),
         { key: 'new', name: 'Új képernyőkímélő…', isNew: true, desc: 'Üres diáról indulva: háttér és komponensek szabadon elhelyezve' }] },
-      { group: 'Zenére reagáló', items: [...Saver.SCENES.filter((x) => x.music).map(se), ...Saver.LIST.filter((x) => x.music).map(be)] },
-      { group: 'Élő adatok', items: Saver.SCENES.filter((x) => !x.music).map(se) },
-      { group: 'Animációk', items: Saver.LIST.filter((x) => !x.music).map(be) },
-    ];
+      ...Saver.SCENE_CATS.map((c) => ({ group: `Preset · ${c}`, items: Saver.SCENES.filter((x) => x.cat === c).map(se) })),
+      ...Saver.BG_CATS.map((c) => ({ group: `Animáció · ${c}`, items: Saver.LIST.filter((x) => x.cat === c).map(be) })),
+    ].filter((g) => g.items.length);
   }
   const NEW_SCENE = () => ({ id: uid(), name: 'Saját képernyőkímélő', bg: 'aurora', widgets: [{ type: 'clock', x: 50, y: 45, scale: 1.85, align: 'c', anim: 'float', color: 'theme' }, { type: 'date', x: 50, y: 62, scale: 1, align: 'c', anim: 'none', color: 'muted' }] });
   function previewKind(e) {
@@ -70,10 +69,20 @@ const SaverUI = (() => {
       x: () => { editEntry({ isNew: true }); return true; },
       select: () => { fullPreview(cur()); return true; },
       start: () => { moreMenu(cur()); return true; },
-      lb: () => true, rb: () => true,
+      lb: () => { jumpGroup(-1); return true; }, rb: () => { jumpGroup(1); return true; },
     });
     renderHints();
     P.mo = new MutationObserver(renderHints); P.mo.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  }
+  // LB/RB: ugrás az előző / következő kategória első elemére
+  function jumpGroup(d) {
+    const items = [...P.list.children];
+    const heads = items.map((x, i) => (x.classList.contains('set-group') ? i : -1)).filter((i) => i >= 0);
+    const at = items.indexOf(Nav.current());
+    const curHead = heads.filter((i) => i < at).pop() ?? -1;
+    const target = d > 0 ? heads.find((i) => i > at) : heads.filter((i) => i < curHead).pop() ?? -1;
+    const first = items.slice((target ?? -1) + 1).find((x) => x.classList.contains('sp-item'));
+    if (first && (d < 0 || target !== undefined)) { Nav.focus(first); first.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
   }
   const cur = () => { const el = Nav.current(); return (el && el._entry) || (P && P.entry); };
   function renderList(focusKey) {
@@ -116,8 +125,8 @@ const SaverUI = (() => {
   function renderHints() {
     if (!P) return;
     P.hints.replaceChildren(...(isPad()
-      ? [hint('btn-a', 'A', 'Kiválasztás'), hint('btn-y', 'Y', 'Szerkesztés'), hint('btn-x', 'X', 'Új'), hint('btn-start', '⧉', 'Teljes előnézet'), hint('btn-start', '≡', 'Továbbiak'), hint('btn-b', 'B', 'Vissza')]
-      : [hint('kbd', 'Enter', 'Kiválasztás'), hint('kbd', 'Y', 'Szerkesztés'), hint('kbd', 'X', 'Új'), hint('kbd', 'F', 'Teljes előnézet'), hint('kbd', 'M', 'Továbbiak'), hint('kbd', 'Esc', 'Vissza')]));
+      ? [hint('btn-a', 'A', 'Kiválasztás'), hint('btn-y', 'Y', 'Szerkesztés'), hint('btn-x', 'X', 'Új'), hint('btn-start', '⧉', 'Teljes előnézet'), hint('btn-start', '≡', 'Továbbiak'), hint('btn-start', 'LB/RB', 'Kategória'), hint('btn-b', 'B', 'Vissza')]
+      : [hint('kbd', 'Enter', 'Kiválasztás'), hint('kbd', 'Y', 'Szerkesztés'), hint('kbd', 'X', 'Új'), hint('kbd', 'F', 'Teljes előnézet'), hint('kbd', 'M', 'Továbbiak'), hint('kbd', 'Q / E', 'Kategória'), hint('kbd', 'Esc', 'Vissza')]));
   }
   async function choose(e) {
     if (!e) return;
@@ -255,8 +264,9 @@ const SaverUI = (() => {
     function elemRows(w) {
       const T = Saver.WIDGETS;
       return [
-        { type: 'select', label: 'Komponens', options: Object.entries(T).map(([k, x]) => [k, `${x.music ? '♪ ' : ''}${x.name}`]), get: () => w.type, set: (v) => { w.type = v; changed({ content: true }); return true; } },
-        ...(w.type === 'text' ? [{ type: 'text', label: 'Szöveg', get: () => w.text || '', set: (v) => { w.text = v; changed({ content: true }); return true; } }] : []),
+        { type: 'select', label: 'Kategória', options: Saver.CATS.map((c) => [c, c]), get: () => (T[w.type] || {}).cat, set: (v) => { const k = Object.keys(T).find((x) => T[x].cat === v); if (k) setType(w, k); return true; } },
+        { type: 'select', label: 'Komponens', options: Object.entries(T).filter(([, x]) => x.cat === (T[w.type] || {}).cat).map(([k, x]) => [k, `${x.music ? '♪ ' : ''}${x.name}`]), get: () => w.type, set: (v) => { setType(w, v); return true; } },
+        ...(T[w.type] && 'text' in T[w.type] ? [{ type: 'text', label: w.type === 'countdown' ? 'Dátum és név (ÉÉÉÉ-HH-NN Név)' : 'Szöveg', get: () => w.text || '', set: (v) => { w.text = v; changed({ content: true }); return true; } }] : []),
         { type: 'slider', label: 'Méret', min: 30, max: 500, step: 10, get: () => Math.round(w.scale * 100), fmt: (v) => `${v}%`, set: (v) => { w.scale = v / 100; changed(); return true; } },
         { type: 'slider', label: 'Vízszintes helyzet', min: 0, max: 100, step: 1, get: () => Math.round(w.x), fmt: (v) => `${v}%`, set: (v) => { w.x = v; changed(); return true; } },
         { type: 'slider', label: 'Függőleges helyzet', min: 0, max: 100, step: 1, get: () => Math.round(w.y), fmt: (v) => `${v}%`, set: (v) => { w.y = v; changed(); return true; } },
@@ -346,15 +356,32 @@ const SaverUI = (() => {
       changed({ content: true });
       if (E.mode === 'panel' && E.sel < 0) setMode('stage');
     }
+    function setType(w, k) {
+      const T = Saver.WIDGETS;
+      if (T[k] && 'text' in T[k] && !(T[w.type] && 'text' in T[w.type])) w.text = T[k].text;
+      w.type = k;
+      Saver.syncAudio();
+      changed({ content: true });
+    }
+    // két lépés: kategória, majd az elem (Ⓑ a kategóriákhoz vissza)
+    let lastCat = null;
     async function addElem() {
-      const t = await modal({ title: 'Új elem', items: [...Object.entries(Saver.WIDGETS).map(([k, x]) => ({ label: `${x.music ? '♪ ' : ''}${x.name}`, value: k })), { label: 'Mégse', value: null }] });
+      const T = Saver.WIDGETS;
+      let t = null;
+      for (;;) {
+        const c = await modal({ title: 'Új elem – kategória', items: [...Saver.CATS.map((x) => ({ label: `${x}  (${Object.values(T).filter((w) => w.cat === x).length})`, value: x, def: x === lastCat })), { label: 'Mégse', value: null }] });
+        if (!E || !c) break;
+        lastCat = c;
+        t = await modal({ title: c, wide: true, items: [...Object.entries(T).filter(([, x]) => x.cat === c).map(([k, x]) => ({ label: `${x.music ? '♪ ' : ''}${x.name}`, value: k })), { label: '‹ Vissza a kategóriákhoz', value: null }] });
+        if (!E || t) break;
+      }
       if (!E) return;
       if (t) {
-        E.sc.widgets.push(Saver.norm({ type: t, x: 50, y: 50, scale: 1, align: 'c', anim: 'none', color: 'white', text: t === 'text' ? 'InariX' : undefined }));
+        E.sc.widgets.push(Saver.norm({ type: t, x: 50, y: 50, scale: 1, align: 'c', anim: 'none', color: 'white', text: 'text' in T[t] ? T[t].text : undefined }));
         E.sel = E.sc.widgets.length - 1; E.tab = 'elem';
         Saver.syncAudio(); // ha zenei elem került be, induljon a hangelemzés
         changed({ content: true });
-        if (t === 'text') { const v = await OSK.prompt({ title: 'Szöveg', value: 'InariX' }); if (E && v !== null) { W().text = v; changed({ content: true }); } }
+        if ('text' in T[t] && t !== 'countdown') { const v = await OSK.prompt({ title: 'Szöveg', value: T[t].text }); if (E && v !== null) { W().text = v; changed({ content: true }); } }
       }
       setMode(E.mode);
     }

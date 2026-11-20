@@ -53,6 +53,8 @@ const UI_ICONS = {
   news: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M7 8.5h10M7 12h10M7 15.5h6"/>',
   map: '<path d="M9 4.5 3.5 6.5v13l5.5-2 6 2 5.5-2v-13l-5.5 2z"/><path d="M9 4.5v13M15 6.5v13"/>',
   'b-youtube': '<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="m10 9.3 5 2.7-5 2.7z" fill="currentColor"/>',
+  'b-netflix': '<path d="M7.5 3.5v17M16.5 3.5v17M7.5 3.5l9 17"/>',
+  'b-hbomax': '<rect x="3" y="5.5" width="18" height="13" rx="3"/><path d="M10.2 9.2v5.6l4.8-2.8z"/>',
   'b-twitch': '<path d="M5 3.5h15v10.5l-4 4h-3.5l-3 3v-3H5z"/><path d="M11 8v4M15.5 8v4"/>',
   'b-ytmusic': '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.8"/><path d="m10.9 10.2 2.6 1.8-2.6 1.8z" fill="currentColor"/>',
   'b-discord': '<path d="M7.6 6.4C9 5.8 10.5 5.5 12 5.5s3 .3 4.4.9c1.8 2.5 2.7 5.4 2.6 8.7-1.4 1.1-2.9 1.8-4.3 2.3l-1-1.8M7.6 6.4C5.8 8.9 4.9 11.8 5 15.1c1.4 1.1 2.9 1.8 4.3 2.3l1-1.8"/><circle cx="9.5" cy="12" r="1.3" fill="currentColor"/><circle cx="14.5" cy="12" r="1.3" fill="currentColor"/>',

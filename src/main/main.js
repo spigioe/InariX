@@ -6,6 +6,7 @@ const { spawn } = require('child_process');
 const { Config } = require('./config');
 const { DisplayManager } = require('./display-manager');
 const { setupBrowser } = require('./browser');
+const { setupWebApps } = require('./webapps');
 const { Accounts } = require('./accounts');
 const { setupOverlay } = require('./overlay');
 const homeinfo = require('./homeinfo');
@@ -35,6 +36,7 @@ if (!process.argv.includes('--cleanup') && !app.requestSingleInstanceLock()) { a
 
 let cfg, win, tray, display, library, agent = null;
 let browser = null;
+let webapps = null;
 let accounts = null;
 let overlay = null;
 let streaming = null; // { proc, host, blocker, startedAt } – Moonlight
@@ -224,6 +226,7 @@ function createWindow() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, webviewTag: true },
   });
   browser = setupBrowser({ getWin: () => win, sendUI, log, onWebview: (wc) => { if (accounts) accounts.attach(wc); } });
+  webapps = setupWebApps({ getWin: () => win, sendUI, log });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   // a zenére reagáló képernyőkímélők a rendszerhangot elemzik (csak helyben, nem rögzítünk semmit);
   // kizárólag a saját felületünk (file://) kapja meg – a webview-k külön munkamenetben futnak
@@ -674,6 +677,8 @@ function registerIpc() {
     if (via.length) log(`[wake] ${h.name} ébresztése továbbítva: ${via.join(', ')}`);
     return { ok: true, via };
   });
+  handle('webapp-open', (id) => webapps.open(id));
+  handle('webapp-close', () => webapps.close());
   handle('settings', async (partial) => {
     const before = JSON.stringify(cfg.get().hostMode);
     cfg.update(partial);

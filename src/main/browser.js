@@ -10,14 +10,23 @@ const SAFE_URL = /^(https?:|about:blank)/i;
 // Engedélyek, amelyek egy konzolos böngészőben értelmesek; minden más (kamera, mikrofon, hely, értesítés…) tiltva
 const ALLOWED_PERMISSIONS = new Set(['fullscreen', 'clipboard-sanitized-write', 'pointerLock', 'keyboardLock']);
 
+// A böngészők négyhetente adnak ki új főverziót; a Google (és más oldalak) az elavultnak látszó böngészőt
+// „nem biztonságosnak” tekintik és nem engedik belépni. Ezért a mai dátumból becsüljük a jelenlegi stabil
+// verziót (egy verzióval óvatosabban), nem egy beégetett számot használunk, ami pár hónap alatt elavul.
+function currentMajor(base, baseDate) {
+  const weeks4 = Math.floor((Date.now() - Date.parse(baseDate)) / (28 * 86400000));
+  return base + Math.max(0, weeks4 - 1);
+}
+function chromeMajor() { return Math.max(parseInt(process.versions.chrome, 10) || 0, currentMajor(131, '2024-11-12')); }
 function chromeUA() {
   // Electron/InariX tokenek nélkül – egyes oldalak (pl. Google bejelentkezés) az ismeretlen böngészőket letiltják
-  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`;
+  return `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${chromeMajor()}.0.0.0 Safari/537.36`;
 }
 
 // A Google a beágyazott (Chromium alapú) böngészőkből tiltja a bejelentkezést („nem biztonságos böngésző”).
-// A Google fiók oldalain Firefox azonosítóval jelentkezünk, a Chromium kliens-tippeket (Sec-CH-UA) elhagyjuk.
-const FIREFOX_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0';
+// A Google fiók oldalain egy aktuális Firefox azonosítóval jelentkezünk, a Chromium kliens-tippeket (Sec-CH-UA) elhagyjuk.
+const ffMajor = () => currentMajor(133, '2024-11-26');
+const firefoxUA = () => `Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:${ffMajor()}.0) Gecko/20100101 Firefox/${ffMajor()}.0`;
 const GOOGLE_AUTH = /^https:\/\/accounts\.google\.com\//i;
 
 function uniquePath(dir, name) {
@@ -36,7 +45,7 @@ function setupBrowser({ getWin, sendUI, log, onWebview }) {
   ses.setPermissionRequestHandler((_wc, perm, cb) => cb(ALLOWED_PERMISSIONS.has(perm)));
   ses.setPermissionCheckHandler((_wc, perm) => ALLOWED_PERMISSIONS.has(perm));
   ses.webRequest.onBeforeSendHeaders({ urls: ['https://accounts.google.com/*'] }, (details, cb) => {
-    const hdr = { ...details.requestHeaders, 'User-Agent': FIREFOX_UA };
+    const hdr = { ...details.requestHeaders, 'User-Agent': firefoxUA() };
     for (const k of Object.keys(hdr)) if (/^sec-ch-ua/i.test(k)) delete hdr[k];
     cb({ requestHeaders: hdr });
   });
@@ -68,7 +77,7 @@ function setupBrowser({ getWin, sendUI, log, onWebview }) {
     wc.on('did-start-navigation', (ev) => {
       const url = ev.url || '';
       if (!ev.isMainFrame || !/^https?:/i.test(url)) return;
-      const ua = GOOGLE_AUTH.test(url) ? FIREFOX_UA : chromeUA();
+      const ua = GOOGLE_AUTH.test(url) ? firefoxUA() : chromeUA();
       if (wc.getUserAgent() !== ua) wc.setUserAgent(ua);
     });
     // HTML teljes képernyő: Esc-re mindig kilépünk (Electronban ez magától nem működik)

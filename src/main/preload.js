@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('gamo', {
   hostUpdate: (id, patch) => call('host-update', id, patch),
   wake: (hostId) => call('wake', hostId),
   settings: (partial) => call('settings', partial),
+  webappOpen: (id) => call('webapp-open', id),
+  webappClose: () => call('webapp-close'),
   newHostToken: () => call('host-token-new'),
   moonlightInstall: () => call('moonlight-install'),
   moonlightGui: () => call('moonlight-gui'),
@@ -94,7 +96,7 @@ contextBridge.exposeInMainWorld('gamo', {
   accountSyncRemote: (hostId, store) => call('account-sync-remote', hostId, store),
   browserShowDownload: (file) => call('browser-show-download', file),
   on: (ch, fn) => {
-    const allowed = ['boot', 'shown', 'hidden', 'stream', 'display', 'log', 'hosts', 'pair', 'stream:frame', 'stream:net', 'browser:open', 'browser:key', 'browser:download', 'account:done', 'accounts', 'update', 'update-result', 'update-progress', 'accounts:syncing', 'accounts:synced'];
+    const allowed = ['boot', 'shown', 'hidden', 'stream', 'display', 'log', 'hosts', 'pair', 'stream:frame', 'stream:net', 'browser:open', 'browser:key', 'browser:download', 'account:done', 'accounts', 'update', 'update-result', 'update-progress', 'accounts:syncing', 'accounts:synced', 'webapp:closed'];
     if (allowed.includes(ch)) ipcRenderer.on(ch, (_e, d) => fn(d));
   },
 });

@@ -965,6 +965,59 @@ body.stream-menu #osk, body.stream-kbd #osk { z-index: 320; }
 @keyframes swSlide { from { opacity: 0; translate: -4cqw 0; } to { opacity: 1; translate: 0 0; } }
 @keyframes swDrift { 0% { translate: -6cqw -4cqh; } 50% { translate: 5cqw 3cqh; } 100% { translate: -3cqw 5cqh; } }
 body.reduce-motion .sw-a { animation: none !important; }
+/* további képernyőkímélő elemek */
+.sw-col-accent2 { color: var(--a1); } .sw-col-gold { color: #fcd34d; } .sw-col-pink { color: #f9a8d4; } .sw-col-green { color: #86efac; }
+.sw-sec { font-size: .45em; opacity: .6; margin-left: .05em; }
+.sw-word { max-width: 24em; text-wrap: balance; }
+.sw-wd { font-size: 3em; }
+.sw-quote { max-width: 26em; font-weight: 500; font-style: italic; text-wrap: balance; }
+.sw-tip { max-width: 24em; }
+.sw-flip { display: flex; gap: .25em; align-items: center; }
+.sw-flip span { font-size: 3.6em; font-weight: 700; width: 1.05em; padding: .08em 0; text-align: center; border-radius: .14em; background: linear-gradient(180deg, rgba(40, 44, 58, .95) 50%, rgba(28, 31, 42, .95) 50%); box-shadow: 0 .15em .4em rgba(0, 0, 0, .5), inset 0 -1px 0 rgba(255, 255, 255, .06); line-height: 1.15; }
+.sw-flip em { font-size: 3em; font-style: normal; opacity: .6; }
+.sw-cal { display: grid; grid-template-columns: repeat(7, 2.1em); gap: .25em; text-align: center; font-size: 1em; }
+.sw-cal b { font-size: .7em; opacity: .55; letter-spacing: .05em; }
+.sw-cal i { font-style: normal; padding: .25em 0; border-radius: .4em; }
+.sw-cal i.on { background: var(--grad); color: #fff; font-weight: 800; box-shadow: 0 0 14px var(--a2); }
+.sw-bar { width: 18em; height: .55em; border-radius: 999px; background: rgba(255, 255, 255, .12); overflow: hidden; }
+.sw-bar i { display: block; height: 100%; border-radius: inherit; background: var(--grad); }
+.sw-marquee { width: 44em; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.sw-marquee > div { display: inline-flex; gap: 2.5em; white-space: nowrap; animation: swMarq 60s linear infinite; padding-right: 2.5em; }
+.sw-strip > div { gap: 1em; padding-right: 1em; animation-duration: 45s; }
+.sw-strip img { width: 7em; aspect-ratio: 2 / 3; object-fit: cover; border-radius: .5em; box-shadow: 0 10px 30px rgba(0, 0, 0, .6); }
+@keyframes swMarq { to { transform: translateX(-50%); } }
+.sw-news { max-width: 30em; } .sw-news > div { flex-direction: column; align-items: flex-start; gap: .1em; }
+.sw-wall { display: grid; grid-template-columns: repeat(4, 7em); gap: .7em; }
+.sw-wall img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: .5em; box-shadow: 0 12px 30px rgba(0, 0, 0, .6); }
+.sw-tall { width: 5em !important; height: 7.5em !important; }
+.sw-chips { display: flex; flex-wrap: wrap; gap: .5em; max-width: 24em; justify-content: inherit; }
+.sw-chips span { padding: .3em .7em; border-radius: 999px; background: rgba(255, 255, 255, .1); }
+.sw-art.sw-ring-ph { position: static; transform: none; font-size: 1em; } .sw-art.sw-ring-ph::before { content: '♪'; font-size: 5em; }
+.sw-art { width: 14em; height: 14em; border-radius: 1em; object-fit: cover; box-shadow: 0 30px 80px rgba(0, 0, 0, .7); display: flex; align-items: center; justify-content: center; }
+.sw-emoji { font-size: 5em; line-height: 1; text-shadow: none; }
+.sw-title { font-weight: 800; font-size: 3.4em; letter-spacing: .02em; }
+.sw-neon { font-weight: 800; color: #fff; text-shadow: 0 0 .08em #fff, 0 0 .2em var(--a2), 0 0 .5em var(--a2), 0 0 1em var(--a1); animation: swNeon 4s infinite; }
+@keyframes swNeon { 0%, 18%, 22%, 60%, 100% { opacity: 1; } 20%, 61% { opacity: .55; } }
+.sw { --oc: #fff; } .sw-col-theme, .sw-col-accent { --oc: var(--a2); } .sw-col-accent2 { --oc: var(--a1); } .sw-col-muted { --oc: #9ca3af; } .sw-col-gold { --oc: #fcd34d; } .sw-col-pink { --oc: #f9a8d4; } .sw-col-green { --oc: #86efac; }
+.sw-outline { font-weight: 900; color: transparent !important; -webkit-text-stroke: .035em var(--oc); text-shadow: 0 0 .3em color-mix(in srgb, var(--oc) 45%, transparent); }
+.sw-gradtext { font-weight: 900; background: var(--grad); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; animation: swGradMove 6s ease-in-out infinite alternate; }
+@keyframes swGradMove { to { background-position: 100% 0; } }
+.sw-type { font-family: Consolas, "Cascadia Mono", monospace; font-weight: 600; white-space: nowrap; overflow: hidden; width: calc(var(--n) * 1ch + .1em); border-right: .1em solid currentColor; animation: swType calc(var(--n) * .12s + 1s) steps(var(--n)) infinite alternate, swCaret .8s step-end infinite; }
+@keyframes swType { from { width: 0; } }
+@keyframes swCaret { 50% { border-color: transparent; } }
+.sw-badge { display: inline-block; padding: .3em .9em; border-radius: 999px; font-weight: 800; letter-spacing: .12em; background: var(--grad); color: #fff; box-shadow: 0 0 20px var(--a2); text-shadow: none; }
+.sw-logo { width: 8em; height: 8em; filter: drop-shadow(0 0 20px var(--a2)); }
+.sw-divider { display: block; width: 20em; height: .12em; border-radius: 999px; background: linear-gradient(90deg, transparent, currentColor, transparent); }
+.sw-col-theme .sw-divider { background: var(--grad); }
+.sw-frame { display: block; width: 26em; height: 15em; border: .18em solid currentColor; border-radius: .8em; box-shadow: 0 0 24px currentColor, inset 0 0 24px currentColor; opacity: .85; }
+.sw-col-theme .sw-frame { border-color: var(--a2); color: var(--a2); }
+.sw-glass { display: block; width: 24em; height: 14em; border-radius: 1.2em; background: rgba(15, 17, 26, .55); border: 1px solid rgba(255, 255, 255, .12); backdrop-filter: blur(14px); box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
+.sw-anim-sway { animation: swSway 5s ease-in-out infinite; transform-origin: 50% 100%; }
+.sw-anim-spin { animation: swSpin 18s linear infinite; }
+.sw-anim-blink { animation: swBlink 1.4s step-end infinite; }
+@keyframes swSway { 0%, 100% { rotate: -4deg; } 50% { rotate: 4deg; } }
+@keyframes swSpin { to { rotate: 360deg; } }
+@keyframes swBlink { 50% { opacity: .15; } }
 
 /* ===== Képernyőkímélő választó ===== */
 .sp, .sed { position: fixed; inset: 0; z-index: 28; background: var(--bg); display: flex; flex-direction: column; animation: fadeIn .2s; }
@@ -1017,3 +1070,11 @@ body.reduce-motion .sw-a { animation: none !important; }
 .sed-layers { display: flex; gap: .4em; padding: .6em; flex-wrap: wrap; border-top: 1px solid var(--line); }
 .sed-layers span { font-size: .8em; padding: .25em .6em; border-radius: .4em; background: rgba(255, 255, 255, .06); color: var(--muted); cursor: pointer; }
 .sed-layers span.on { background: var(--a2); color: #000; font-weight: 700; }
+/* DRM-es streaming appok (Edge-ben): takaró képernyő az InariX-ben, amíg futnak */
+#webapp-cover { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 35%, rgba(40, 20, 60, .9), #05060a 70%); animation: fadeIn .3s; }
+#webapp-cover .wa-box { display: flex; flex-direction: column; align-items: center; gap: 1em; max-width: 760px; text-align: center; padding: 2em; }
+#webapp-cover h1 { margin: 0; font-size: 2.2em; }
+#webapp-cover p { margin: 0; color: var(--muted); }
+#webapp-cover .wa-keys { display: flex; flex-wrap: wrap; justify-content: center; gap: .6em 1.4em; margin: .6em 0 1em; color: var(--muted); }
+#webapp-cover .menu-item { width: auto; padding: .7em 1.4em; }
+#webapp-cover .app-ic.big { width: 5em; height: 5em; }

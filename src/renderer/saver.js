@@ -275,6 +275,13 @@ const Saver = (() => {
     } },
   ];
 
+  // a háttér animációk kategóriái
+  const BG_CATS = ['Természet', 'Geometria', 'Retró', 'Zenei animációk'];
+  const BG_CAT = { clock: 'Retró', stars: 'Természet', matrix: 'Retró', aurora: 'Természet', bubbles: 'Természet', fireflies: 'Természet', bounce: 'Retró', plasma: 'Retró',
+    waves: 'Geometria', network: 'Geometria', rain: 'Természet', snow: 'Természet', fireworks: 'Retró', lava: 'Retró', tunnel: 'Geometria', lissajous: 'Geometria',
+    covers: 'Geometria', flow: 'Geometria', pipes: 'Retró', ripples: 'Természet' };
+  LIST.forEach((x) => { x.cat = x.music ? 'Zenei animációk' : BG_CAT[x.id] || 'Geometria'; });
+
   // ================= Rendszerhang elemzés (zenére reagáló elemek) =================
   // A rendszerhang „loopback” rögzítéséből számolt spektrum; ha nem elérhető, a lejátszás állapotából szimulált ütem.
   const NB = 48;
@@ -331,16 +338,166 @@ const Saver = (() => {
   }
 
   // ================= Jelenetek: háttér + élő adatokat mutató komponensek =================
-  // scene = { id, name, bg: kímélő id | 'black', widgets: [{ type, x, y (0–100 %, a horgony), scale, align: l|c|r, anim, color, react, text? }] }
+  // scene = { id, name, cat, bg: kímélő id | 'black', widgets: [{ type, x, y (0–100 %, a horgony), scale, align: l|c|r, anim, color, react, opacity?, text? }] }
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const p2 = (n) => String(n).padStart(2, '0');
+  const hm = (d) => d.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
+  const games = () => (S.lib && S.lib.games) || [];
+  const installed = () => games().filter((x) => x.sources && x.sources.length);
+  const coverOf = (g) => g.cover || g.coverFallback || '';
+  const withCover = () => games().filter((x) => coverOf(x));
+  const cv = (v, wd, ht) => `<canvas class="sw-viz" data-v="${v}" style="width:${wd}em;height:${ht}em"></canvas>`;
+  const bar = (pct, label) => `<span class="sw-cap">${label}</span><div class="sw-bar"><i style="width:${Math.max(0, Math.min(100, pct)).toFixed(1)}%"></i></div>`;
+  const ago = (ms) => { const d = Math.floor((Date.now() - ms) / 86400000); return d <= 0 ? 'ma' : d === 1 ? 'tegnap' : `${d} napja`; };
+  const HOURS = ['tizenkettő', 'egy', 'kettő', 'három', 'négy', 'öt', 'hat', 'hét', 'nyolc', 'kilenc', 'tíz', 'tizenegy'];
+  function timeWords(d) {
+    let m = Math.round(d.getMinutes() / 5) * 5, hh = d.getHours();
+    if (m === 60) { m = 0; hh++; }
+    const H = (k) => HOURS[(hh + k) % 12], n = { 5: 'öt', 10: 'tíz', 20: 'tíz', 25: 'öt' };
+    switch (m) {
+      case 0: return `${H(0)} óra`;
+      case 5: case 10: return `${n[m]} perccel múlt ${H(0)}`;
+      case 15: return `negyed ${H(1)}`;
+      case 20: case 25: return `${n[m]} perc múlva fél ${H(1)}`;
+      case 30: return `fél ${H(1)}`;
+      case 35: return `öt perccel múlt fél ${H(1)}`;
+      case 40: return `tíz perccel múlt fél ${H(1)}`;
+      case 45: return `háromnegyed ${H(1)}`;
+      default: return `${m === 50 ? 'tíz' : 'öt'} perc múlva ${H(1)}`;
+    }
+  }
+  function moon(d) {
+    const ph = (((d.getTime() - Date.UTC(2000, 0, 6, 18, 14)) / 86400000) % 29.53059 + 29.53059) % 29.53059;
+    const i = Math.round((ph / 29.53059) * 8) % 8;
+    return { ic: ['🌑', '🌒', '🌓', '🌔', '🌕', '🌖', '🌗', '🌘'][i], name: ['Újhold', 'Növő sarló', 'Első negyed', 'Növő hold', 'Telihold', 'Fogyó hold', 'Utolsó negyed', 'Fogyó sarló'][i] };
+  }
+  const QUOTES = ['Minden nagy kaland egyetlen lépéssel kezdődik.', 'A legjobb mentés az, amit nem kell visszatölteni.', 'Pihenj egyet – a következő pálya is megvár.',
+    'A türelem a legerősebb fegyver.', 'Nem a cél a lényeg, hanem az út.', 'Egy jó csapat többet ér a legjobb felszerelésnél.', 'Ma is jó nap egy új kezdéshez.',
+    'A hiba csak egy újabb próbálkozás kezdete.', 'Lassan járj, tovább érsz.', 'Ahol a térkép véget ér, ott kezdődik a kaland.', 'Néha a legjobb lépés a szünet gomb.', 'Minden mester egykor kezdő volt.'];
+  const TIPS = ['A Guide gombbal bárhonnan előhozod a gyorsmenüt.', 'A képernyőkímélőket a Beállításokban választhatod és szerkesztheted.', 'Az appok között a ⧉ gombbal váltasz.',
+    'Stream közben a Select+Start nyitja a menüt.', 'A témaszerkesztőben a csempék animációja is állítható.', 'Az X gombbal a játék adatlapját nyitod meg.',
+    'A zenére reagáló képernyőkímélők a gép hangját követik.', 'A billentyűzeten hosszan nyomott betűvel ékezetes változatot kapsz.'];
+  const WORLD = [['London', 'Europe/London'], ['New York', 'America/New_York'], ['Tokió', 'Asia/Tokyo']];
+  const STORE_N = { steam: 'Steam', epic: 'Epic', gog: 'GOG', msstore: 'Microsoft', ubisoft: 'Ubisoft', custom: 'Egyedi' };
+  const marquee = (inner) => `<div class="sw-marquee"><div>${inner}${inner}</div></div>`;
+  async function np() { return wCache.np || null; }
+
+  const CATS = ['Idő', 'Információ', 'Játékok', 'Zene', 'Szöveg és díszítés', 'Formák és effektek'];
+  // html(w, d): a komponens tartalma (lehet aszinkron) · text: van szerkeszthető szövege (alapérték) · music: a hangot elemzi
   const WIDGETS = {
-    clock: { name: 'Óra' }, date: { name: 'Dátum' }, weather: { name: 'Időjárás' }, music: { name: 'Most szól' },
-    hosts: { name: 'Gépek állapota' }, library: { name: 'Könyvtár (utoljára játszott)' }, news: { name: 'Játékhírek' },
-    battery: { name: 'Akkumulátor' }, text: { name: 'Saját szöveg' }, cover: { name: 'Játékborító (váltakozó)' },
-    'viz-bars': { name: 'Zene: spektrum sáv', music: true }, 'viz-wave': { name: 'Zene: hullámforma', music: true },
-    'viz-ring': { name: 'Zene: lüktető albumborító', music: true }, 'viz-dots': { name: 'Zene: pontmátrix', music: true },
+    // ---- Idő ----
+    clock: { cat: 'Idő', name: 'Óra', html: (w, d) => `<b class="sw-big">${hm(d)}</b>` },
+    'clock-sec': { cat: 'Idő', name: 'Óra másodpercekkel', html: (w, d) => `<b class="sw-big">${hm(d)}<small class="sw-sec">:${p2(d.getSeconds())}</small></b>` },
+    'clock-12': { cat: 'Idő', name: '12 órás óra', html: (w, d) => `<b class="sw-big">${(d.getHours() % 12) || 12}:${p2(d.getMinutes())}</b><span class="sw-cap">${d.getHours() < 12 ? 'délelőtt' : 'délután'}</span>` },
+    'clock-flip': { cat: 'Idő', name: 'Lapozós óra', html: (w, d) => { const s = hm(d); return `<div class="sw-flip">${[...s].map((c) => (c === ':' ? '<em>:</em>' : `<span>${c}</span>`)).join('')}</div>`; } },
+    'clock-analog': { cat: 'Idő', name: 'Analóg óra', html: () => cv('analog', 12, 12) },
+    'clock-ring': { cat: 'Idő', name: 'Óra másodperc-gyűrűvel', html: () => cv('ringclock', 13, 13) },
+    'clock-binary': { cat: 'Idő', name: 'Bináris óra', html: () => cv('binary', 12, 8) },
+    'clock-word': { cat: 'Idő', name: 'Óra szavakkal', html: (w, d) => `<b class="sw-mid sw-word">${timeWords(d)}</b>` },
+    date: { cat: 'Idő', name: 'Dátum', html: (w, d) => `<span class="sw-cap">${esc(d.toLocaleDateString('hu-HU', { weekday: 'long', month: 'long', day: 'numeric' }))}</span>` },
+    weekday: { cat: 'Idő', name: 'A hét napja', html: (w, d) => { const s = d.toLocaleDateString('hu-HU', { weekday: 'long' }); return `<b class="sw-big sw-wd">${s[0].toUpperCase()}${s.slice(1)}</b>`; } },
+    calendar: { cat: 'Idő', name: 'Havi naptár', html: (w, d) => {
+      const y = d.getFullYear(), m = d.getMonth(), first = (new Date(y, m, 1).getDay() + 6) % 7, days = new Date(y, m + 1, 0).getDate();
+      let c = ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'].map((x) => `<b>${x}</b>`).join('') + '<i></i>'.repeat(first);
+      for (let i = 1; i <= days; i++) c += `<i${i === d.getDate() ? ' class="on"' : ''}>${i}</i>`;
+      return `<span class="sw-cap">${d.toLocaleDateString('hu-HU', { year: 'numeric', month: 'long' })}</span><div class="sw-cal">${c}</div>`;
+    } },
+    daypct: { cat: 'Idő', name: 'A nap haladása', html: (w, d) => { const p = ((d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds()) / 864); return bar(p, `A nap ${Math.floor(p)}%-a eltelt`); } },
+    yearpct: { cat: 'Idő', name: 'Az év haladása', html: (w, d) => { const y0 = new Date(d.getFullYear(), 0, 1), y1 = new Date(d.getFullYear() + 1, 0, 1), p = ((d - y0) / (y1 - y0)) * 100; return bar(p, `${d.getFullYear()} · ${p.toFixed(1)}%`); } },
+    countdown: { cat: 'Idő', name: 'Visszaszámlálás', text: `${new Date().getFullYear()}-12-31 Szilveszter`, html: (w, d) => {
+      const m = /^(\d{4})-(\d{1,2})-(\d{1,2})\s*(.*)$/.exec(String(w.text || '').trim());
+      if (!m) return '<span class="sw-cap">Szöveg: ÉÉÉÉ-HH-NN Név</span>';
+      let s = Math.max(0, Math.floor((new Date(+m[1], m[2] - 1, +m[3]) - d) / 1000));
+      const dd = Math.floor(s / 86400); s %= 86400;
+      return `<span class="sw-cap">${esc(m[4] || 'Visszaszámlálás')}</span><b class="sw-mid">${dd} nap ${p2(Math.floor(s / 3600))}:${p2(Math.floor((s % 3600) / 60))}:${p2(s % 60)}</b>`;
+    } },
+    'world-clock': { cat: 'Idő', name: 'Világóra', html: (w, d) => `<div class="sw-list">${WORLD.map(([n, tz]) => `<div><b>${n}</b><span>${d.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit', timeZone: tz })}</span></div>`).join('')}</div>` },
+    uptime: { cat: 'Idő', name: 'Az InariX futási ideje', html: () => { const m = Math.floor(performance.now() / 60000); return `<span class="sw-cap">Az InariX fut</span><b class="sw-mid">${Math.floor(m / 60)} ó ${m % 60} p</b>`; } },
+    moon: { cat: 'Idő', name: 'Holdfázis', html: (w, d) => { const x = moon(d); return `<b class="sw-emoji">${x.ic}</b><span class="sw-cap">${x.name}</span>`; } },
+    // ---- Információ ----
+    weather: { cat: 'Információ', name: 'Időjárás', html: async () => { const x = await wx(); return x === null ? NOCITY : x ? `<b class="sw-mid">${esc(x.icon)} ${esc(x.temp)}°</b><span class="sw-cap">${esc(x.city)}</span>` : ''; } },
+    'weather-big': { cat: 'Információ', name: 'Időjárás (nagy)', html: async () => { const x = await wx(); return x === null ? NOCITY : x ? `<b class="sw-emoji">${esc(x.icon)}</b><b class="sw-big">${esc(x.temp)}°</b><span class="sw-cap">${esc(x.city)}</span>` : ''; } },
+    battery: { cat: 'Információ', name: 'Akkumulátor', html: () => (S.battery ? `<span class="sw-mid">${S.battery.charging ? '⚡' : '🔋'} ${Math.round(S.battery.level * 100)}%</span>` : '') },
+    'battery-bar': { cat: 'Információ', name: 'Akkumulátor sáv', html: () => (S.battery ? bar(S.battery.level * 100, `Akkumulátor · ${Math.round(S.battery.level * 100)}%${S.battery.charging ? ' · töltés' : ''}`) : '') },
+    'net-status': { cat: 'Információ', name: 'Hálózat állapota', html: () => `<div class="sw-list"><div><i class="${navigator.onLine ? 'on' : 'off'}"></i><b>${navigator.onLine ? 'Online' : 'Nincs internet'}</b>${navigator.connection && navigator.connection.downlink ? `<span>${navigator.connection.downlink} Mbit/s</span>` : ''}</div></div>` },
+    hosts: { cat: 'Információ', name: 'Gépek állapota', html: () => {
+      const hs = (S.lib && S.lib.hosts) || [], info = (S.state && S.state.hostInfo) || {};
+      return `<div class="sw-list">${hs.map((x) => `<div><i class="${x.local || x.online ? 'on' : 'off'}"></i><b>${esc(x.local ? 'Ez a gép' : x.name)}</b><span>${x.local ? 'helyi' : x.online ? `online${info[x.id] && info[x.id].ping ? ` · ${info[x.id].ping} ms` : ''}` : 'offline'}</span></div>`).join('')}</div>`;
+    } },
+    'host-count': { cat: 'Információ', name: 'Online gépek száma', html: () => { const hs = (S.lib && S.lib.hosts) || []; const on = hs.filter((x) => x.local || x.online).length; return `<b class="sw-big">${on}/${hs.length}</b><span class="sw-cap">gép online</span>`; } },
+    greeting: { cat: 'Információ', name: 'Üdvözlés', html: (w, d) => { const hh = d.getHours(); return `<b class="sw-mid sw-greet">${hh >= 5 && hh < 9 ? 'Jó reggelt!' : hh < 18 && hh >= 9 ? 'Szép napot!' : hh >= 18 && hh < 22 ? 'Jó estét!' : 'Jó éjszakát!'}</b>`; } },
+    quote: { cat: 'Információ', name: 'Idézet (váltakozó)', html: () => `<b class="sw-mid sw-quote">„${QUOTES[Math.floor(tick / 20) % QUOTES.length]}”</b>` },
+    tip: { cat: 'Információ', name: 'InariX tipp', html: () => `<span class="sw-cap">Tipp</span><span class="sw-sub sw-tip">${TIPS[Math.floor(tick / 15) % TIPS.length]}</span>` },
+    news: { cat: 'Információ', name: 'Játékhír (váltakozó)', html: async () => { const L = await newsList(); if (!L.length) return '<span class="sw-cap">Nincs friss hír</span>'; const it = L[Math.floor(tick / 15) % L.length]; return `<span class="sw-cap">${esc(it.game)}</span><b class="sw-mid">${esc(it.title)}</b>`; } },
+    'news-list': { cat: 'Információ', name: 'Hírek listája', html: async () => { const L = (await newsList()).slice(0, 4); return L.length ? `<span class="sw-cap">Játékhírek</span><div class="sw-list sw-news">${L.map((x) => `<div><b>${esc(x.title)}</b><span>${esc(x.game)}</span></div>`).join('')}</div>` : '<span class="sw-cap">Nincs friss hír</span>'; } },
+    'news-ticker': { cat: 'Információ', name: 'Hírszalag', html: async () => { const L = await newsList(); return L.length ? marquee(L.map((x) => `<span><b>${esc(x.game)}</b> · ${esc(x.title)}</span>`).join('')) : ''; } },
+    // ---- Játékok ----
+    library: { cat: 'Játékok', name: 'Utoljára játszottak', html: () => {
+      const g = games().filter((x) => x.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 4);
+      return `<span class="sw-cap">${installed().length} telepített játék · utoljára játszott</span><div class="sw-covers">${g.map((x) => `<img src="${esc(coverOf(x))}" alt="">`).join('')}</div>`;
+    } },
+    cover: { cat: 'Játékok', name: 'Játékborító (váltakozó)', html: () => { const L = withCover(); if (!L.length) return ''; const g = L[Math.floor(tick / 10) % L.length]; return `<img class="sw-cover" src="${esc(coverOf(g))}" alt=""><span class="sw-cap">${esc(g.name)}</span>`; } },
+    'lib-count': { cat: 'Játékok', name: 'Játékok száma', html: () => `<b class="sw-big">${games().length}</b><span class="sw-cap">játék a könyvtárban · ${installed().length} telepítve</span>` },
+    'last-game': { cat: 'Játékok', name: 'Utoljára játszott játék', html: () => { const g = games().filter((x) => x.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed)[0]; return g ? `<div class="sw-np"><img class="sw-tall" src="${esc(coverOf(g))}" alt=""><div><span class="sw-cap">Utoljára játszott · ${ago(g.lastPlayed)}</span><b class="sw-mid">${esc(g.name)}</b></div></div>` : ''; } },
+    'top-played': { cat: 'Játékok', name: 'Legtöbbet játszott', html: () => { const L = games().filter((x) => x.playSec > 0).sort((a, b) => b.playSec - a.playSec).slice(0, 3); return L.length ? `<span class="sw-cap">Legtöbbet játszott</span><div class="sw-list">${L.map((x, i) => `<div><b>${i + 1}. ${esc(x.name)}</b><span>${Math.round(x.playSec / 3600)} óra</span></div>`).join('')}</div>` : ''; } },
+    'playtime-total': { cat: 'Játékok', name: 'Összes játékidő', html: () => { const s = games().reduce((a, x) => a + (x.playSec || 0), 0); return `<b class="sw-big">${Math.round(s / 3600)}</b><span class="sw-cap">óra játékidő összesen</span>`; } },
+    'cover-wall': { cat: 'Játékok', name: 'Borítófal', html: () => { const L = withCover(); if (!L.length) return ''; const k = Math.floor(tick / 12); return `<div class="sw-wall">${Array.from({ length: Math.min(8, L.length) }, (_, i) => `<img src="${esc(coverOf(L[(i + k) % L.length]))}" alt="">`).join('')}</div>`; } },
+    'cover-strip': { cat: 'Játékok', name: 'Borító szalag (mozgó)', html: () => { const L = withCover().slice(0, 14); return L.length ? marquee(L.map((x) => `<img src="${esc(coverOf(x))}" alt="">`).join('')).replace('sw-marquee', 'sw-marquee sw-strip') : ''; } },
+    'random-game': { cat: 'Játékok', name: 'Mit játsszak? (ajánló)', html: () => { const L = installed().filter(coverOf); if (!L.length) return ''; const g = L[(Math.floor(tick / 20) * 7) % L.length]; return `<span class="sw-cap">Mit játsszak ma?</span><img class="sw-cover" src="${esc(coverOf(g))}" alt=""><b class="sw-mid">${esc(g.name)}</b>`; } },
+    'store-count': { cat: 'Játékok', name: 'Játékok áruházanként', html: () => { const c = {}; for (const g of games()) c[g.store] = (c[g.store] || 0) + 1; return `<div class="sw-chips">${Object.entries(c).sort((a, b) => b[1] - a[1]).map(([k, n]) => `<span><b>${n}</b> ${STORE_N[k] || esc(k)}</span>`).join('')}</div>`; } },
+    // ---- Zene ----
+    music: { cat: 'Zene', name: 'Most szól', html: async () => { const x = await np(); return x ? `<div class="sw-np">${x.art ? `<img src="${esc(x.art)}" alt="">` : ''}<div><span class="sw-cap">${esc(x.src)}${x.playing ? '' : ' · szünetel'}</span><b class="sw-mid">${esc(x.title)}</b><span class="sw-sub">${esc(x.sub || '')}</span></div></div>` : '<span class="sw-cap">Most nem szól semmi</span>'; } },
+    'np-mini': { cat: 'Zene', name: 'Most szól (egy sor)', html: async () => { const x = await np(); return x ? `<span class="sw-sub">♪ <b>${esc(x.title)}</b>${x.sub ? ` – ${esc(x.sub)}` : ''}</span>` : ''; } },
+    'np-title': { cat: 'Zene', name: 'Dal címe (nagy)', html: async () => { const x = await np(); return x ? `<b class="sw-big sw-npt">${esc(x.title)}</b><span class="sw-cap">${esc(x.sub || x.src)}</span>` : '<span class="sw-cap">Most nem szól semmi</span>'; } },
+    'np-art': { cat: 'Zene', name: 'Albumborító (nagy)', html: async () => { const x = await np(); return x && x.art ? `<img class="sw-art" src="${esc(x.art)}" alt="">` : '<i class="sw-ring-ph sw-art"></i>'; } },
+    'viz-bars': { cat: 'Zene', name: 'Spektrum sáv', music: true, html: () => cv('bars', 26, 6) },
+    'viz-mirror': { cat: 'Zene', name: 'Tükrözött spektrum', music: true, html: () => cv('mirror', 26, 8) },
+    'viz-line': { cat: 'Zene', name: 'Spektrum görbe', music: true, html: () => cv('line', 26, 7) },
+    'viz-wave': { cat: 'Zene', name: 'Hullámforma', music: true, html: () => cv('wave', 26, 4.5) },
+    'viz-dots': { cat: 'Zene', name: 'Pontmátrix', music: true, html: () => cv('dots', 22, 7) },
+    'viz-circle': { cat: 'Zene', name: 'Spektrum kör', music: true, html: () => cv('circle', 14, 14) },
+    'viz-ring': { cat: 'Zene', name: 'Lüktető albumborító', music: true, html: async () => { const x = await np(); return `<div class="sw-ring">${cv('ring', 14, 14)}${x && x.art ? `<img src="${esc(x.art)}" alt="">` : '<i class="sw-ring-ph">♪</i>'}</div>`; } },
+    'viz-blob': { cat: 'Zene', name: 'Lüktető folt', music: true, html: () => cv('blob', 14, 14) },
+    'viz-vu': { cat: 'Zene', name: 'VU-mérő', music: true, html: () => cv('vu', 18, 10) },
+    'viz-level': { cat: 'Zene', name: 'Hangerő oszlop', music: true, html: () => cv('level', 3, 14) },
+    'beat-dot': { cat: 'Zene', name: 'Ütemjelző', music: true, html: () => cv('beat', 6, 6) },
+    // ---- Szöveg és díszítés ----
+    text: { cat: 'Szöveg és díszítés', name: 'Saját szöveg', text: 'InariX', html: (w) => `<b class="sw-mid">${esc(w.text || '')}</b>` },
+    title: { cat: 'Szöveg és díszítés', name: 'Címsor', text: 'InariX', html: (w) => `<b class="sw-big sw-title">${esc(w.text || '')}</b>` },
+    'text-neon': { cat: 'Szöveg és díszítés', name: 'Neon felirat', text: 'PLAY', html: (w) => `<b class="sw-big sw-neon">${esc(w.text || '')}</b>` },
+    'text-outline': { cat: 'Szöveg és díszítés', name: 'Körvonalas felirat', text: 'GAME ON', html: (w) => `<b class="sw-big sw-outline">${esc(w.text || '')}</b>` },
+    'text-gradient': { cat: 'Szöveg és díszítés', name: 'Színátmenetes felirat', text: 'INARIX', html: (w) => `<b class="sw-big sw-gradtext">${esc(w.text || '')}</b>` },
+    typewriter: { cat: 'Szöveg és díszítés', name: 'Írógép szöveg', text: 'Indul a játék…', html: (w) => { const t = String(w.text || ''); return `<b class="sw-mid sw-type" style="--n:${Math.max(1, t.length)}">${esc(t)}</b>`; } },
+    badge: { cat: 'Szöveg és díszítés', name: 'Címke', text: 'ÉLŐ', html: (w) => `<span class="sw-badge">${esc(w.text || '')}</span>` },
+    emoji: { cat: 'Szöveg és díszítés', name: 'Emoji', text: '🎮', html: (w) => `<b class="sw-emoji">${esc(w.text || '')}</b>` },
+    logo: { cat: 'Szöveg és díszítés', name: 'InariX logó', html: () => '<img class="sw-logo" src="../../assets/inarix-mark.svg" alt="">' },
+    divider: { cat: 'Szöveg és díszítés', name: 'Elválasztó vonal', html: () => '<i class="sw-divider"></i>' },
+    frame: { cat: 'Szöveg és díszítés', name: 'Keret', html: () => '<i class="sw-frame"></i>' },
+    glass: { cat: 'Szöveg és díszítés', name: 'Üveg panel (háttérnek)', html: () => '<i class="sw-glass"></i>' },
+    // ---- Formák és effektek ----
+    orb: { cat: 'Formák és effektek', name: 'Izzó gömb', html: () => cv('orb', 12, 12) },
+    rings: { cat: 'Formák és effektek', name: 'Forgó gyűrűk', html: () => cv('rings', 12, 12) },
+    spinner: { cat: 'Formák és effektek', name: 'Pörgő ív', html: () => cv('spinner', 8, 8) },
+    polygon: { cat: 'Formák és effektek', name: 'Forgó sokszögek', html: () => cv('polygon', 12, 12) },
+    cube: { cat: 'Formák és effektek', name: 'Forgó kocka', html: () => cv('cube', 12, 12) },
+    sparkles: { cat: 'Formák és effektek', name: 'Csillogás', html: () => cv('sparkles', 20, 10) },
+    dotwave: { cat: 'Formák és effektek', name: 'Pontrács hullám', html: () => cv('dotwave', 22, 8) },
+    sine: { cat: 'Formák és effektek', name: 'Szinuszvonalak', html: () => cv('sine', 24, 6) },
+    loader: { cat: 'Formák és effektek', name: 'Töltő csík', html: () => cv('loader', 20, 1.2) },
   };
-  const ANIM = { none: 'Nincs', drift: 'Lassú vándorlás', float: 'Lebegés', pulse: 'Lüktetés', fade: 'Elhalványuló', slide: 'Beúszás', glow: 'Ragyogás' };
-  const COLOR = { theme: 'Téma színátmenet', white: 'Fehér', accent: 'Kiemelő szín', muted: 'Halvány' };
+  const NOCITY = '<span class="sw-cap">Időjárás: a Beállításokban adj meg várost</span>';
+  async function wx() {
+    if (!S.state || !S.state.settings.ui.weatherCity) return null;
+    if (!wCache.wx || Date.now() - wCache.wxAt > 600000) { wCache.wxAt = Date.now(); wCache.wx = await gamo.weather().catch(() => false); }
+    return wCache.wx || false;
+  }
+  async function newsList() {
+    if (!wCache.news) { wCache.news = []; const n = await gamo.homeNews().catch(() => null); wCache.news = (n && n.news) || []; }
+    return wCache.news;
+  }
+
+  const ANIM = { none: 'Nincs', drift: 'Lassú vándorlás', float: 'Lebegés', pulse: 'Lüktetés', fade: 'Elhalványuló', slide: 'Beúszás', glow: 'Ragyogás', sway: 'Ringatózás', spin: 'Forgás', blink: 'Villogás' };
+  const COLOR = { theme: 'Téma színátmenet', white: 'Fehér', accent: 'Kiemelő szín', accent2: 'Második kiemelő szín', muted: 'Halvány', gold: 'Arany', pink: 'Rózsaszín', green: 'Zöld' };
   const ALIGN = { l: 'Balra', c: 'Középre', r: 'Jobbra' };
   // régi (rácsos) formátum → szabad elhelyezés
   const POSXY = { tl: [5, 9, 'l'], tc: [50, 9, 'c'], tr: [95, 9, 'r'], ml: [5, 50, 'l'], mc: [50, 50, 'c'], mr: [95, 50, 'r'], bl: [5, 89, 'l'], bc: [50, 89, 'c'], br: [95, 89, 'r'] };
@@ -349,76 +506,58 @@ const Saver = (() => {
     if (w.x == null || w.y == null) { const p = POSXY[w.pos] || POSXY.mc; w.x = p[0]; w.y = p[1]; if (!w.align) w.align = p[2]; }
     if (w.scale == null) w.scale = SIZEK[w.size] || 1;
     if (!w.align) w.align = 'c';
+    if (w.text == null && WIDGETS[w.type] && 'text' in WIDGETS[w.type]) w.text = WIDGETS[w.type].text;
     delete w.pos; delete w.size;
     return w;
   }
   const W = (type, x, y, scale, align, more = {}) => ({ type, x, y, scale, align, anim: 'none', color: 'white', ...more });
+  const SCENE_CATS = ['Óra és idő', 'Információ', 'Játékok', 'Zene', 'Hangulat'];
   const SCENES = [
-    { id: 'dyn-info', name: 'Információs pult', bg: 'aurora', widgets: [W('clock', 50, 46, 1.85, 'c', { anim: 'float', color: 'theme' }), W('date', 50, 89, 1, 'c', { color: 'muted' }), W('weather', 95, 9, 1, 'r'), W('music', 5, 89, 1, 'l', { anim: 'slide' })] },
-    { id: 'dyn-hosts', name: 'Gépek és hálózat', bg: 'network', widgets: [W('hosts', 50, 50, 1.35, 'c'), W('clock', 5, 9, 1, 'l', { color: 'theme' }), W('battery', 95, 9, 0.75, 'r', { color: 'muted' })] },
-    { id: 'dyn-library', name: 'Játékkönyvtár', bg: 'covers', widgets: [W('library', 5, 80, 1.35, 'l', { anim: 'slide' }), W('clock', 95, 9, 1, 'r')] },
-    { id: 'dyn-news', name: 'Játékhírek', bg: 'flow', widgets: [W('news', 50, 50, 1.35, 'c', { anim: 'fade' }), W('clock', 5, 9, 1, 'l', { color: 'theme' }), W('date', 95, 9, 0.75, 'r', { color: 'muted' })] },
-    { id: 'dyn-music', name: 'Zenelejátszó', bg: 'waves', music: true, widgets: [W('music', 50, 50, 1.85, 'c', { anim: 'float', react: true }), W('clock', 95, 9, 0.75, 'r', { color: 'muted' })] },
-    { id: 'dyn-stage', name: 'Koncertszínpad', bg: 'spectrum', music: true, widgets: [W('viz-ring', 50, 38, 1.3, 'c'), W('music', 50, 66, 1.2, 'c'), W('clock', 5, 9, 0.9, 'l', { color: 'theme' })] },
-    { id: 'dyn-club', name: 'Klub', bg: 'beatburst', music: true, widgets: [W('clock', 50, 45, 1.85, 'c', { color: 'theme', react: true }), W('viz-wave', 50, 70, 1.2, 'c'), W('music', 5, 89, 0.9, 'l')] },
-    { id: 'dyn-studio', name: 'Stúdió', bg: 'nebula', music: true, widgets: [W('viz-bars', 50, 80, 1.6, 'c'), W('music', 5, 12, 1.2, 'l', { anim: 'slide' }), W('clock', 95, 12, 1.2, 'r', { color: 'theme' })] },
+    // Információ
+    { id: 'dyn-info', cat: 'Információ', name: 'Információs pult', bg: 'aurora', widgets: [W('clock', 50, 46, 1.85, 'c', { anim: 'float', color: 'theme' }), W('date', 50, 89, 1, 'c', { color: 'muted' }), W('weather', 95, 9, 1, 'r'), W('music', 5, 89, 1, 'l', { anim: 'slide' })] },
+    { id: 'dyn-hosts', cat: 'Információ', name: 'Gépek és hálózat', bg: 'network', widgets: [W('hosts', 50, 50, 1.35, 'c'), W('clock', 5, 9, 1, 'l', { color: 'theme' }), W('battery', 95, 9, 0.75, 'r', { color: 'muted' })] },
+    { id: 'dyn-news', cat: 'Információ', name: 'Játékhírek', bg: 'flow', widgets: [W('news', 50, 50, 1.35, 'c', { anim: 'fade' }), W('clock', 5, 9, 1, 'l', { color: 'theme' }), W('date', 95, 9, 0.75, 'r', { color: 'muted' })] },
+    { id: 'p-morning', cat: 'Információ', name: 'Reggeli áttekintés', bg: 'aurora', widgets: [W('greeting', 5, 12, 1.6, 'l', { color: 'theme', anim: 'slide' }), W('date', 5, 21, 1, 'l', { color: 'muted' }), W('weather-big', 95, 20, 1, 'r'), W('clock', 50, 52, 1.6, 'c', { anim: 'float' }), W('calendar', 5, 78, 0.9, 'l'), W('tip', 95, 86, 0.9, 'r', { color: 'muted' })] },
+    { id: 'p-calendar', cat: 'Információ', name: 'Naptár', bg: 'snow', widgets: [W('calendar', 50, 50, 1.5, 'c'), W('clock', 95, 10, 1.1, 'r', { color: 'theme' }), W('moon', 5, 86, 0.9, 'l'), W('yearpct', 95, 88, 0.9, 'r')] },
+    { id: 'p-system', cat: 'Információ', name: 'Rendszer', bg: 'network', widgets: [W('glass', 50, 50, 1.6, 'c', { opacity: 0.8 }), W('host-count', 36, 42, 1, 'c', { color: 'theme' }), W('net-status', 64, 38, 1.1, 'c'), W('battery-bar', 64, 52, 1, 'c'), W('uptime', 36, 62, 1, 'c', { color: 'muted' }), W('clock', 64, 64, 1, 'c')] },
+    { id: 'p-quotes', cat: 'Információ', name: 'Idézetek', bg: 'flow', widgets: [W('quote', 50, 46, 1.4, 'c', { anim: 'fade' }), W('divider', 50, 60, 1, 'c', { color: 'theme' }), W('clock', 95, 90, 0.9, 'r', { color: 'muted' })] },
+    { id: 'p-ticker', cat: 'Információ', name: 'Hírszalag', bg: 'waves', widgets: [W('news-list', 50, 45, 1.2, 'c'), W('news-ticker', 50, 92, 1, 'c'), W('clock', 5, 9, 1, 'l', { color: 'theme' })] },
+    // Óra és idő
+    { id: 'p-minimal', cat: 'Óra és idő', name: 'Minimál óra', bg: 'black', widgets: [W('clock-sec', 50, 46, 1.6, 'c'), W('date', 50, 62, 1, 'c', { color: 'muted' })] },
+    { id: 'p-analog', cat: 'Óra és idő', name: 'Analóg elegancia', bg: 'stars', widgets: [W('clock-analog', 50, 44, 2.3, 'c'), W('weekday', 50, 84, 0.6, 'c', { color: 'muted' })] },
+    { id: 'p-flip', cat: 'Óra és idő', name: 'Lapozós óra', bg: 'black', widgets: [W('clock-flip', 50, 46, 2, 'c'), W('daypct', 50, 80, 1, 'c', { color: 'muted' })] },
+    { id: 'p-world', cat: 'Óra és idő', name: 'Világidő', bg: 'network', widgets: [W('clock', 50, 34, 1.6, 'c', { color: 'theme' }), W('world-clock', 50, 66, 1.4, 'c')] },
+    { id: 'p-binary', cat: 'Óra és idő', name: 'Bináris', bg: 'matrix', widgets: [W('glass', 50, 50, 1.2, 'c'), W('clock-binary', 50, 46, 1.6, 'c'), W('clock-word', 50, 66, 1, 'c', { color: 'accent' })] },
+    { id: 'p-words', cat: 'Óra és idő', name: 'Szavas óra', bg: 'aurora', widgets: [W('clock-word', 50, 46, 2, 'c', { color: 'theme', anim: 'float' }), W('date', 50, 64, 1, 'c', { color: 'muted' })] },
+    { id: 'p-ring', cat: 'Óra és idő', name: 'Másodperc-gyűrű', bg: 'ripples', widgets: [W('clock-ring', 50, 48, 2.2, 'c'), W('countdown', 95, 90, 0.9, 'r', { color: 'muted' })] },
+    // Játékok
+    { id: 'dyn-library', cat: 'Játékok', name: 'Játékkönyvtár', bg: 'covers', widgets: [W('library', 5, 80, 1.35, 'l', { anim: 'slide' }), W('clock', 95, 9, 1, 'r')] },
+    { id: 'p-wall', cat: 'Játékok', name: 'Borítófal', bg: 'black', widgets: [W('cover-wall', 50, 54, 1.25, 'c'), W('lib-count', 5, 10, 0.8, 'l', { color: 'theme' }), W('clock', 95, 10, 1, 'r')] },
+    { id: 'p-pick', cat: 'Játékok', name: 'Mit játsszak?', bg: 'covers', widgets: [W('glass', 50, 50, 1.5, 'c'), W('random-game', 50, 50, 1.1, 'c', { anim: 'pulse' }), W('clock', 95, 9, 1, 'r')] },
+    { id: 'p-stats', cat: 'Játékok', name: 'Játékos statisztika', bg: 'pipes', widgets: [W('glass', 50, 50, 1.9, 'c', { opacity: 0.9 }), W('playtime-total', 32, 36, 1, 'c', { color: 'theme' }), W('lib-count', 68, 36, 1, 'c', { color: 'theme' }), W('top-played', 32, 66, 1, 'c'), W('store-count', 68, 66, 1, 'c')] },
+    { id: 'p-strip', cat: 'Játékok', name: 'Borító szalag', bg: 'tunnel', widgets: [W('title', 50, 26, 1, 'c', { text: 'Játékkönyvtár', color: 'theme' }), W('cover-strip', 50, 58, 1.2, 'c'), W('last-game', 5, 90, 0.8, 'l')] },
+    // Zene
+    { id: 'dyn-music', cat: 'Zene', name: 'Zenelejátszó', bg: 'waves', music: true, widgets: [W('music', 50, 50, 1.85, 'c', { anim: 'float', react: true }), W('clock', 95, 9, 0.75, 'r', { color: 'muted' })] },
+    { id: 'dyn-stage', cat: 'Zene', name: 'Koncertszínpad', bg: 'spectrum', music: true, widgets: [W('viz-ring', 50, 34, 1.3, 'c'), W('music', 50, 64, 1.2, 'c'), W('clock', 5, 9, 0.9, 'l', { color: 'theme' })] },
+    { id: 'dyn-club', cat: 'Zene', name: 'Klub', bg: 'beatburst', music: true, widgets: [W('clock', 50, 45, 1.85, 'c', { color: 'theme', react: true }), W('viz-wave', 50, 70, 1.2, 'c'), W('music', 5, 89, 0.9, 'l')] },
+    { id: 'dyn-studio', cat: 'Zene', name: 'Stúdió', bg: 'nebula', music: true, widgets: [W('viz-bars', 50, 80, 1.6, 'c'), W('music', 5, 12, 1.2, 'l', { anim: 'slide' }), W('clock', 95, 12, 1.2, 'r', { color: 'theme' })] },
+    { id: 'p-vu', cat: 'Zene', name: 'VU-mérő', bg: 'black', music: true, widgets: [W('viz-vu', 50, 44, 2, 'c'), W('np-mini', 50, 78, 1.2, 'c'), W('viz-level', 92, 50, 1, 'c')] },
+    { id: 'p-neon', cat: 'Zene', name: 'Neon klub', bg: 'bassrings', music: true, widgets: [W('text-neon', 50, 40, 1.6, 'c', { text: 'PARTY', react: true }), W('viz-mirror', 50, 76, 1.4, 'c'), W('beat-dot', 92, 10, 0.9, 'c'), W('np-mini', 5, 92, 0.9, 'l')] },
+    { id: 'p-album', cat: 'Zene', name: 'Albumborító', bg: 'nebula', music: true, widgets: [W('np-art', 50, 38, 1.2, 'c', { react: true }), W('np-title', 50, 70, 0.7, 'c'), W('viz-line', 50, 88, 1.6, 'c')] },
+    // Hangulat
+    { id: 'p-synth', cat: 'Hangulat', name: 'Szintwave', bg: 'waves', widgets: [W('orb', 50, 40, 2.6, 'c'), W('text-gradient', 50, 40, 1.1, 'c', { text: 'INARIX' }), W('clock', 50, 70, 1, 'c', { color: 'gold' }), W('sine', 50, 88, 1.6, 'c')] },
+    { id: 'p-zen', cat: 'Hangulat', name: 'Zen', bg: 'ripples', widgets: [W('emoji', 50, 34, 2, 'c', { text: '🌿', anim: 'sway' }), W('quote', 50, 62, 1, 'c', { anim: 'fade' }), W('clock', 95, 90, 0.8, 'r', { color: 'muted' })] },
+    { id: 'p-arcade', cat: 'Hangulat', name: 'Retró árkád', bg: 'pipes', widgets: [W('frame', 50, 50, 2.2, 'c', { color: 'pink' }), W('text-outline', 50, 40, 1, 'c', { text: 'INSERT COIN', anim: 'blink', color: 'gold' }), W('clock-flip', 50, 62, 1, 'c'), W('cube', 88, 18, 0.8, 'c')] },
+    { id: 'p-space', cat: 'Hangulat', name: 'Űrállomás', bg: 'stars', widgets: [W('rings', 80, 30, 1.6, 'c'), W('polygon', 18, 72, 1.1, 'c', { anim: 'drift' }), W('clock', 50, 50, 1.6, 'c', { color: 'accent2' }), W('loader', 50, 64, 1.2, 'c'), W('typewriter', 50, 72, 0.9, 'c', { text: 'Rendszerek aktívak…', color: 'muted' })] },
   ];
   const needsAudio = (sc, bg) => !!((bg && bg.music) || (sc && (sc.widgets || []).some((w) => w.react || (WIDGETS[w.type] && WIDGETS[w.type].music))));
 
   let wTimer = 0, layer = null, tick = 0, editor = false;
   const wCache = {};
-  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   async function widgetHtml(w) {
-    const d = new Date();
-    try {
-      switch (w.type) {
-        case 'clock': return `<b class="sw-big">${d.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}</b>`;
-        case 'date': return `<span class="sw-cap">${esc(d.toLocaleDateString('hu-HU', { weekday: 'long', month: 'long', day: 'numeric' }))}</span>`;
-        case 'text': return `<b class="sw-mid">${esc(w.text || 'InariX')}</b>`;
-        case 'battery': return S.battery ? `<span class="sw-mid">${S.battery.charging ? '⚡' : '🔋'} ${Math.round(S.battery.level * 100)}%</span>` : '';
-        case 'weather': {
-          if (!S.state || !S.state.settings.ui.weatherCity) return '<span class="sw-cap">Időjárás: a Beállításokban adj meg várost</span>';
-          if (!wCache.wx || Date.now() - wCache.wxAt > 600000) { wCache.wx = await gamo.weather().catch(() => null); wCache.wxAt = Date.now(); }
-          const x = wCache.wx; return x ? `<b class="sw-mid">${esc(x.icon)} ${esc(x.temp)}°</b><span class="sw-cap">${esc(x.city)}</span>` : '';
-        }
-        case 'music': {
-          const np = wCache.np;
-          if (!np) return '<span class="sw-cap">Most nem szól semmi</span>';
-          return `<div class="sw-np">${np.art ? `<img src="${esc(np.art)}" alt="">` : ''}<div><span class="sw-cap">${esc(np.src)}${np.playing ? '' : ' · szünetel'}</span><b class="sw-mid">${esc(np.title)}</b><span class="sw-sub">${esc(np.sub || '')}</span></div></div>`;
-        }
-        case 'hosts': {
-          const hs = (S.lib && S.lib.hosts) || [];
-          const info = (S.state && S.state.hostInfo) || {};
-          return `<div class="sw-list">${hs.map((x) => `<div><i class="${x.local || x.online ? 'on' : 'off'}"></i><b>${esc(x.local ? 'Ez a gép' : x.name)}</b><span>${x.local ? 'helyi' : x.online ? `online${info[x.id] && info[x.id].ping ? ` · ${info[x.id].ping} ms` : ''}` : 'offline'}</span></div>`).join('')}</div>`;
-        }
-        case 'library': {
-          const all = (S.lib && S.lib.games) || [];
-          const g = all.filter((x) => x.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 4);
-          const n = all.filter((x) => x.sources && x.sources.length).length;
-          return `<span class="sw-cap">${n} telepített játék · utoljára játszott</span><div class="sw-covers">${g.map((x) => `<img src="${esc(x.cover || x.coverFallback || '')}" alt="">`).join('')}</div>`;
-        }
-        case 'news': {
-          if (!wCache.news) { const n = await gamo.homeNews().catch(() => null); wCache.news = (n && n.news) || []; }
-          const L = wCache.news; if (!L.length) return '<span class="sw-cap">Nincs friss hír</span>';
-          const it = L[Math.floor(tick / 3) % L.length];
-          return `<span class="sw-cap">${esc(it.game)}</span><b class="sw-mid">${esc(it.title)}</b>`;
-        }
-        case 'cover': {
-          const L = ((S.lib && S.lib.games) || []).filter((x) => x.cover);
-          if (!L.length) return '';
-          const g = L[Math.floor(tick / 2) % L.length];
-          return `<img class="sw-cover" src="${esc(g.cover)}" alt=""><span class="sw-cap">${esc(g.name)}</span>`;
-        }
-        case 'viz-bars': return '<canvas class="sw-viz sw-viz-bars" data-v="bars"></canvas>';
-        case 'viz-wave': return '<canvas class="sw-viz sw-viz-wave" data-v="wave"></canvas>';
-        case 'viz-dots': return '<canvas class="sw-viz sw-viz-dots" data-v="dots"></canvas>';
-        case 'viz-ring': {
-          const art = wCache.np && wCache.np.art;
-          return `<div class="sw-ring"><canvas class="sw-viz" data-v="ring"></canvas>${art ? `<img src="${esc(art)}" alt="">` : '<i class="sw-ring-ph">♪</i>'}</div>`;
-        }
-        default: return '';
-      }
-    } catch { return ''; }
+    const def = WIDGETS[w.type];
+    if (!def) return '';
+    try { return (await def.html(w, new Date())) || ''; } catch { return ''; }
   }
   const ALG = { l: '0%', c: '-50%', r: '-100%' };
   function place(el, w) {
@@ -436,21 +575,22 @@ const Saver = (() => {
     items.forEach((w, i) => {
       norm(w);
       const el = layer.children[i];
-      const cls = `sw sw-${w.type} sw-al-${w.align} sw-col-${w.color || 'white'}${w.react ? ' sw-react' : ''}`;
+      const cls = `sw swt-${w.type} sw-al-${w.align} sw-col-${w.color || 'white'}${w.react ? ' sw-react' : ''}`;
       if (el.className !== cls) el.className = cls;
       const an = `sw-a sw-anim-${w.anim || 'none'}`;
       if (el.firstChild.className !== an) el.firstChild.className = an;
       place(el, w);
     });
   }
+  // másodpercenként (a másodperces órák miatt); a lejátszás állapota 5 másodpercenként frissül
   async function renderWidgets() {
     if (!layer || !scene) return;
-    tick++;
     const sc = scene;
-    if (sc.widgets.some((w) => w.type === 'music' || w.type === 'viz-ring') || needsAudio(sc, cur)) {
+    if (tick % 5 === 0 && (sc.widgets.some((w) => /^(music|np-|viz-ring)/.test(w.type)) || needsAudio(sc, cur))) {
       wCache.np = typeof nowPlayingAny === 'function' ? await nowPlayingAny().catch(() => null) : null;
       AU.np = !!(wCache.np && wCache.np.playing);
     }
+    tick++;
     if (sc !== scene) return;
     layout();
     await Promise.all(sc.widgets.map(async (w, i) => {
@@ -461,44 +601,103 @@ const Saver = (() => {
     }));
     if (onRender) onRender();
   }
-  // zenére reagáló komponensek: képkockánként
+
+  // ---- vászon-alapú komponensek rajzolása (képkockánként) ----
+  // g: 2D context, w/h: pixelméret, a: hangelemzés, A/B: téma színek, t: idő (ms), cv: maga a vászon (saját állapotnak)
+  const DRAW = {
+    bars(g, w, h, a, A, B) { const n = a.bins.length, bw = w / n; for (let i = 0; i < n; i++) { const bh = Math.max(h * 0.04, a.bins[i] * h); g.fillStyle = rgba(mix(A, B, i / n), 0.92); g.fillRect(i * bw + bw * 0.15, h - bh, bw * 0.7, bh); } },
+    mirror(g, w, h, a, A, B) { const n = a.bins.length, bw = w / n; for (let i = 0; i < n; i++) { const bh = Math.max(h * 0.02, a.bins[i] * h * 0.5); g.fillStyle = rgba(mix(A, B, i / n), 0.92); g.fillRect(i * bw + bw * 0.15, h / 2 - bh, bw * 0.7, bh * 2); } },
+    line(g, w, h, a, A, B) {
+      const n = a.bins.length, pts = [...a.bins].map((v, i) => [(i / (n - 1)) * w, h - 4 - v * (h - 8)]);
+      g.beginPath(); g.moveTo(0, h); pts.forEach(([x, y], i) => { if (!i) g.lineTo(x, y); else { const [px, py] = pts[i - 1]; g.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2); } }); g.lineTo(w, h); g.closePath();
+      const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, rgba(B, 0.55)); gr.addColorStop(1, rgba(A, 0)); g.fillStyle = gr; g.fill();
+      g.strokeStyle = rgba(B); g.lineWidth = Math.max(2, h * 0.03); g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke();
+    },
+    wave(g, w, h, a, A, B) { g.lineWidth = Math.max(2, h * 0.05); g.strokeStyle = rgba(B); g.shadowColor = rgba(A); g.shadowBlur = h * 0.15; g.beginPath(); for (let i = 0; i < a.wave.length; i++) { const x = (i / (a.wave.length - 1)) * w, y = h / 2 + a.wave[i] * h * 0.45; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); g.shadowBlur = 0; },
+    dots(g, w, h, a, A, B) { const cols = 24, rows = 8, dw = w / cols, dh = h / rows; for (let i = 0; i < cols; i++) { const lit = Math.round(a.bins[Math.floor((i / cols) * a.bins.length)] * rows); for (let r = 0; r < rows; r++) { g.fillStyle = rgba(mix(A, B, r / rows), r < lit ? 0.95 : 0.08); g.beginPath(); g.arc(i * dw + dw / 2, h - (r + 0.5) * dh, Math.min(dw, dh) * 0.36, 0, TAU); g.fill(); } } },
+    circle(g, w, h, a, A, B, t) {
+      const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.28, n = a.bins.length, rot = t * 0.0002;
+      g.lineCap = 'round'; g.lineWidth = Math.max(2, (TAU * R) / (n * 2) * 0.55);
+      for (let i = 0; i < n * 2; i++) { const k = i < n ? i : n * 2 - 1 - i, an = rot + (i / (n * 2)) * TAU, L = R * 0.06 + a.bins[k] * R * 0.75; g.strokeStyle = rgba(mix(A, B, k / n)); g.beginPath(); g.moveTo(cx + Math.cos(an) * R, cy + Math.sin(an) * R); g.lineTo(cx + Math.cos(an) * (R + L), cy + Math.sin(an) * (R + L)); g.stroke(); }
+    },
+    ring(g, w, h, a, A, B, t, cv) {
+      const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.33, n = a.bins.length;
+      g.lineCap = 'round'; g.lineWidth = Math.max(2, (TAU * R) / (n * 2) * 0.5);
+      for (let i = 0; i < n * 2; i++) { const k = i < n ? i : n * 2 - 1 - i, an = (i / (n * 2)) * TAU - Math.PI / 2, L = R * 0.05 + a.bins[k] * R * 0.5; g.strokeStyle = rgba(mix(A, B, k / n), 0.95); g.beginPath(); g.moveTo(cx + Math.cos(an) * R * 1.04, cy + Math.sin(an) * R * 1.04); g.lineTo(cx + Math.cos(an) * (R * 1.04 + L), cy + Math.sin(an) * (R * 1.04 + L)); g.stroke(); }
+      const im = cv.nextElementSibling; if (im) im.style.transform = `translate(-50%, -50%) scale(${(1 + a.bass * 0.08 + a.beat * 0.05).toFixed(3)})`;
+    },
+    blob(g, w, h, a, A, B, t) {
+      const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.3 * (1 + a.bass * 0.25), n = 64;
+      g.beginPath();
+      for (let i = 0; i <= n; i++) { const an = (i / n) * TAU, k = a.bins[Math.floor(((i % n) / n) * 24)] || 0, r = R * (1 + k * 0.45 + Math.sin(an * 3 + t * 0.002) * 0.05); const x = cx + Math.cos(an) * r, y = cy + Math.sin(an) * r; i ? g.lineTo(x, y) : g.moveTo(x, y); }
+      const gr = g.createRadialGradient(cx, cy, 0, cx, cy, R * 1.5); gr.addColorStop(0, rgba(B, 0.95)); gr.addColorStop(1, rgba(A, 0.6)); g.fillStyle = gr; g.shadowColor = rgba(B); g.shadowBlur = R * 0.4; g.fill(); g.shadowBlur = 0;
+    },
+    vu(g, w, h, a, A, B, t, cv) {
+      cv._v = (cv._v || 0) * 0.8 + Math.min(1, a.level * 2.2) * 0.2;
+      const cx = w / 2, cy = h * 0.92, R = Math.min(w * 0.46, h * 0.85);
+      g.lineWidth = Math.max(2, R * 0.06); g.lineCap = 'butt';
+      g.strokeStyle = rgba(mix(A, B, 0.5), 0.5); g.beginPath(); g.arc(cx, cy, R, Math.PI * 1.15, Math.PI * 1.7); g.stroke();
+      g.strokeStyle = 'rgba(255,80,90,.85)'; g.beginPath(); g.arc(cx, cy, R, Math.PI * 1.7, Math.PI * 1.85); g.stroke();
+      g.lineWidth = Math.max(1, R * 0.015); g.strokeStyle = 'rgba(255,255,255,.6)';
+      for (let i = 0; i <= 10; i++) { const an = Math.PI * (1.15 + 0.07 * i); g.beginPath(); g.moveTo(cx + Math.cos(an) * R * 0.88, cy + Math.sin(an) * R * 0.88); g.lineTo(cx + Math.cos(an) * R * 0.8, cy + Math.sin(an) * R * 0.8); g.stroke(); }
+      const an = Math.PI * (1.15 + 0.7 * cv._v);
+      g.strokeStyle = '#fff'; g.lineWidth = Math.max(2, R * 0.025); g.shadowColor = rgba(B); g.shadowBlur = R * 0.1;
+      g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(an) * R * 0.95, cy + Math.sin(an) * R * 0.95); g.stroke(); g.shadowBlur = 0;
+      g.fillStyle = rgba(A); g.beginPath(); g.arc(cx, cy, R * 0.07, 0, TAU); g.fill();
+    },
+    level(g, w, h, a, A, B) { const n = 20, sh = h / n, lit = Math.round(Math.min(1, a.level * 2.2) * n); for (let i = 0; i < n; i++) { g.fillStyle = i < lit ? (i > n * 0.8 ? 'rgba(255,80,90,.95)' : rgba(mix(A, B, i / n))) : 'rgba(255,255,255,.08)'; g.fillRect(w * 0.1, h - (i + 1) * sh + 2, w * 0.8, sh - 4); } },
+    beat(g, w, h, a, A, B) { const r = Math.min(w, h) * (0.22 + a.beat * 0.22); const gr = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, r * 1.6); gr.addColorStop(0, rgba(mix(B, [255, 255, 255], 0.4))); gr.addColorStop(0.5, rgba(A, 0.6)); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); },
+    analog(g, w, h, a, A, B) {
+      const d = new Date(), cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.46, s = d.getSeconds() + d.getMilliseconds() / 1000, m = d.getMinutes() + s / 60, hr = (d.getHours() % 12) + m / 60;
+      g.lineWidth = R * 0.03; g.strokeStyle = rgba(mix(A, B, 0.5), 0.6); g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.stroke();
+      for (let i = 0; i < 60; i++) { const an = (i / 60) * TAU, big = i % 5 === 0; g.strokeStyle = big ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.25)'; g.lineWidth = big ? R * 0.03 : R * 0.012; g.beginPath(); g.moveTo(cx + Math.sin(an) * R * (big ? 0.82 : 0.88), cy - Math.cos(an) * R * (big ? 0.82 : 0.88)); g.lineTo(cx + Math.sin(an) * R * 0.94, cy - Math.cos(an) * R * 0.94); g.stroke(); }
+      const hand = (v, len, wd, col) => { const an = v * TAU; g.strokeStyle = col; g.lineWidth = wd; g.lineCap = 'round'; g.beginPath(); g.moveTo(cx - Math.sin(an) * R * 0.1, cy + Math.cos(an) * R * 0.1); g.lineTo(cx + Math.sin(an) * R * len, cy - Math.cos(an) * R * len); g.stroke(); };
+      hand(hr / 12, 0.5, R * 0.06, '#fff'); hand(m / 60, 0.75, R * 0.04, '#fff'); hand(s / 60, 0.85, R * 0.015, rgba(B));
+      g.fillStyle = rgba(B); g.beginPath(); g.arc(cx, cy, R * 0.04, 0, TAU); g.fill();
+    },
+    ringclock(g, w, h, a, A, B) {
+      const d = new Date(), cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.42, s = d.getSeconds() + d.getMilliseconds() / 1000;
+      g.lineWidth = R * 0.07; g.lineCap = 'round'; g.strokeStyle = 'rgba(255,255,255,.08)'; g.beginPath(); g.arc(cx, cy, R, 0, TAU); g.stroke();
+      const gr = g.createLinearGradient(cx - R, cy - R, cx + R, cy + R); gr.addColorStop(0, rgba(A)); gr.addColorStop(1, rgba(B));
+      g.strokeStyle = gr; g.beginPath(); g.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + (s / 60) * TAU); g.stroke();
+      g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `200 ${R * 0.55}px "Segoe UI", sans-serif`; g.fillText(hm(d), cx, cy);
+    },
+    binary(g, w, h, a, A, B) {
+      const d = new Date(), digits = `${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`, cw = w / 6, rh = h / 4, r = Math.min(cw, rh) * 0.32;
+      for (let c = 0; c < 6; c++) for (let b = 0; b < 4; b++) { const on = (+digits[c] >> b) & 1; g.fillStyle = on ? rgba(mix(A, B, c / 5)) : 'rgba(255,255,255,.08)'; g.beginPath(); g.arc(c * cw + cw / 2 + (c > 1 ? cw * 0.0 : 0), h - (b + 0.5) * rh, r, 0, TAU); g.fill(); }
+    },
+    orb(g, w, h, a, A, B, t) { const R = Math.min(w, h) * (0.32 + Math.sin(t * 0.0015) * 0.03 + a.bass * 0.08); const gr = g.createRadialGradient(w / 2 - R * 0.3, h / 2 - R * 0.3, R * 0.05, w / 2, h / 2, R * 1.5); gr.addColorStop(0, rgba(mix(B, [255, 255, 255], 0.5))); gr.addColorStop(0.45, rgba(A, 0.85)); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); },
+    rings(g, w, h, a, A, B, t) { const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.45; g.lineCap = 'round'; for (let k = 0; k < 3; k++) { const r = R * (1 - k * 0.25), st = t * 0.001 * (k % 2 ? -1 : 1) * (1 + k * 0.4); g.lineWidth = R * 0.05; g.strokeStyle = rgba(mix(A, B, k / 2), 0.9); g.beginPath(); g.arc(cx, cy, r, st, st + Math.PI * (0.7 + k * 0.3)); g.stroke(); g.strokeStyle = rgba(mix(A, B, k / 2), 0.15); g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.stroke(); } },
+    spinner(g, w, h, a, A, B, t) { const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.4, st = t * 0.004; const gr = g.createConicGradient ? g.createConicGradient(st, cx, cy) : null; if (gr) { gr.addColorStop(0, rgba(A, 0)); gr.addColorStop(0.8, rgba(B)); gr.addColorStop(1, rgba(B, 0)); } g.strokeStyle = gr || rgba(B); g.lineWidth = R * 0.14; g.lineCap = 'round'; g.beginPath(); g.arc(cx, cy, R, st, st + Math.PI * 1.6); g.stroke(); },
+    polygon(g, w, h, a, A, B, t) { const cx = w / 2, cy = h / 2, R = Math.min(w, h) * 0.45; for (let k = 0; k < 4; k++) { const n = 3 + k, r = R * (1 - k * 0.2), rot = t * 0.0004 * (k % 2 ? -1 : 1); g.strokeStyle = rgba(mix(A, B, k / 3), 0.85); g.lineWidth = Math.max(1.5, R * 0.025); g.beginPath(); for (let i = 0; i <= n; i++) { const an = rot + (i / n) * TAU; const x = cx + Math.cos(an) * r, y = cy + Math.sin(an) * r; i ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); } },
+    cube(g, w, h, a, A, B, t) {
+      const cx = w / 2, cy = h / 2, S2 = Math.min(w, h) * 0.26, ax = t * 0.0007, ay = t * 0.0011;
+      const P = [-1, 1].flatMap((x) => [-1, 1].flatMap((y) => [-1, 1].map((z) => [x, y, z]))).map(([x, y, z]) => { let y1 = y * Math.cos(ax) - z * Math.sin(ax), z1 = y * Math.sin(ax) + z * Math.cos(ax); const x1 = x * Math.cos(ay) + z1 * Math.sin(ay); z1 = -x * Math.sin(ay) + z1 * Math.cos(ay); const k = 3 / (3 + z1); return [cx + x1 * S2 * k * 1.3, cy + y1 * S2 * k * 1.3]; });
+      g.strokeStyle = rgba(B); g.lineWidth = Math.max(1.5, S2 * 0.05); g.shadowColor = rgba(A); g.shadowBlur = S2 * 0.2; g.beginPath();
+      for (let i = 0; i < 8; i++) for (const b of [1, 2, 4]) { const j = i ^ b; if (j > i) { g.moveTo(...P[i]); g.lineTo(...P[j]); } }
+      g.stroke(); g.shadowBlur = 0;
+    },
+    sparkles(g, w, h, a, A, B, t) { for (let i = 0; i < 40; i++) { const x = ((Math.sin(i * 91.7) + 1) / 2) * w, y = ((Math.sin(i * 47.3 + 1) + 1) / 2) * h, k = Math.max(0, Math.sin(t * 0.002 + i * 1.7)), r = Math.min(w, h) * 0.035 * k; if (r < 0.5) continue; g.fillStyle = rgba(i % 2 ? A : mix(B, [255, 255, 255], 0.4), k); g.beginPath(); g.moveTo(x, y - r * 2); g.lineTo(x + r * 0.4, y - r * 0.4); g.lineTo(x + r * 2, y); g.lineTo(x + r * 0.4, y + r * 0.4); g.lineTo(x, y + r * 2); g.lineTo(x - r * 0.4, y + r * 0.4); g.lineTo(x - r * 2, y); g.lineTo(x - r * 0.4, y - r * 0.4); g.fill(); } },
+    dotwave(g, w, h, a, A, B, t) { const cols = 28, rows = 8, dw = w / cols, dh = h / rows; for (let i = 0; i < cols; i++) for (let r = 0; r < rows; r++) { const k = (Math.sin(i * 0.45 + r * 0.6 - t * 0.003) + 1) / 2; g.fillStyle = rgba(mix(A, B, k), 0.25 + k * 0.75); g.beginPath(); g.arc(i * dw + dw / 2, r * dh + dh / 2, Math.min(dw, dh) * (0.12 + k * 0.25), 0, TAU); g.fill(); } },
+    sine(g, w, h, a, A, B, t) { for (let k = 0; k < 4; k++) { g.strokeStyle = rgba(mix(A, B, k / 3), 0.85 - k * 0.15); g.lineWidth = Math.max(1.5, h * 0.03); g.beginPath(); for (let x = 0; x <= w; x += 4) { const y = h / 2 + Math.sin(x * 0.02 * (1 + k * 0.3) + t * 0.002 * (1 + k * 0.2)) * h * 0.35 * (1 - k * 0.15); x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); } },
+    loader(g, w, h, a, A, B, t) { const r = h / 2; g.fillStyle = 'rgba(255,255,255,.08)'; g.beginPath(); g.roundRect(0, 0, w, h, r); g.fill(); const k = (t % 2600) / 2600, x0 = (k * 1.6 - 0.4) * w; const gr = g.createLinearGradient(x0, 0, x0 + w * 0.4, 0); gr.addColorStop(0, rgba(A, 0)); gr.addColorStop(0.5, rgba(B)); gr.addColorStop(1, rgba(A, 0)); g.fillStyle = gr; g.beginPath(); g.roundRect(0, 0, w, h, r); g.fill(); },
+  };
+  // vászon-alapú és zenére reagáló komponensek: képkockánként
   function drawViz(t) {
     if (!layer) return;
     const a = AU;
     for (const el of layer.children) {
       const c = el.firstChild && el.firstChild.firstChild;
       if (!c) continue;
-      if (el.classList.contains('sw-react')) c.style.transform = `scale(${(1 + a.bass * 0.14 + a.beat * 0.07).toFixed(3)})`;
+      if (state.audio && el.classList.contains('sw-react')) c.style.transform = `scale(${(1 + a.bass * 0.14 + a.beat * 0.07).toFixed(3)})`;
       else if (c.style.transform) c.style.transform = '';
       for (const cv of c.querySelectorAll('canvas.sw-viz')) {
         const k = Math.min(window.devicePixelRatio || 1, 1.5), cw = Math.round(cv.clientWidth * k), ch = Math.round(cv.clientHeight * k);
         if (!cw || !ch) continue;
         if (cv.width !== cw || cv.height !== ch) { cv.width = cw; cv.height = ch; }
-        const g = cv.getContext('2d'), A = state.A, B = state.B;
+        const g = cv.getContext('2d'), fn = DRAW[cv.dataset.v];
         g.clearRect(0, 0, cw, ch);
-        const v = cv.dataset.v;
-        if (v === 'bars') {
-          const n = a.bins.length, bw = cw / n;
-          for (let i = 0; i < n; i++) { const bh = Math.max(ch * 0.04, a.bins[i] * ch); g.fillStyle = rgba(mix(A, B, i / n), 0.92); g.fillRect(i * bw + bw * 0.15, ch - bh, bw * 0.7, bh); }
-        } else if (v === 'wave') {
-          g.lineWidth = Math.max(2, ch * 0.05); g.strokeStyle = rgba(B); g.shadowColor = rgba(A); g.shadowBlur = ch * 0.15; g.beginPath();
-          for (let i = 0; i < a.wave.length; i++) { const x = (i / (a.wave.length - 1)) * cw, y = ch / 2 + a.wave[i] * ch * 0.45; i ? g.lineTo(x, y) : g.moveTo(x, y); }
-          g.stroke();
-        } else if (v === 'dots') {
-          const cols = 24, rows = 8, dw = cw / cols, dh = ch / rows;
-          for (let i = 0; i < cols; i++) {
-            const lit = Math.round(a.bins[Math.floor((i / cols) * a.bins.length)] * rows);
-            for (let r = 0; r < rows; r++) { g.fillStyle = rgba(mix(A, B, r / rows), r < lit ? 0.95 : 0.08); g.beginPath(); g.arc(i * dw + dw / 2, ch - (r + 0.5) * dh, Math.min(dw, dh) * 0.36, 0, TAU); g.fill(); }
-          }
-        } else if (v === 'ring') {
-          const cx = cw / 2, cy = ch / 2, R = Math.min(cw, ch) * 0.33, n = a.bins.length;
-          g.lineCap = 'round'; g.lineWidth = Math.max(2, (TAU * R) / (n * 2) * 0.5);
-          for (let i = 0; i < n * 2; i++) {
-            const kk = i < n ? i : n * 2 - 1 - i, an = (i / (n * 2)) * TAU - Math.PI / 2, L = R * 0.05 + a.bins[kk] * R * 0.5;
-            g.strokeStyle = rgba(mix(A, B, kk / n), 0.95); g.beginPath(); g.moveTo(cx + Math.cos(an) * R * 1.04, cy + Math.sin(an) * R * 1.04); g.lineTo(cx + Math.cos(an) * (R * 1.04 + L), cy + Math.sin(an) * (R * 1.04 + L)); g.stroke();
-          }
-          const im = cv.nextElementSibling; if (im) im.style.transform = `translate(-50%, -50%) scale(${(1 + a.bass * 0.08 + a.beat * 0.05).toFixed(3)})`;
-        }
+        if (fn) try { fn(g, cw, ch, a, state.A, state.B, t, cv); } catch { /* egy elem hibája ne állítsa meg a többit */ }
       }
     }
   }
@@ -520,7 +719,7 @@ const Saver = (() => {
     const k = canvas.width / (vw || 1);
     ctx.setTransform(k, 0, 0, k, 0, 0);
     try { cur.frame(ctx, vw, vh, ts, dt, state); } catch { /* egy kímélő hibája ne állítsa meg a többit */ }
-    if (state.audio) drawViz(ts);
+    drawViz(ts);
     if (clockEl) clockEl.textContent = new Date().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
   }
   const BLACK = { id: 'black', name: 'Fekete', init() {}, frame(c, w, h) { c.fillStyle = '#000'; c.fillRect(0, 0, w, h); } };
@@ -551,7 +750,7 @@ const Saver = (() => {
     size();
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     setBg(scene ? scene.bg : id);
-    if (layer) { layer.replaceChildren(); if (scene) { layout(); renderWidgets(); wTimer = setInterval(renderWidgets, 5000); } }
+    if (layer) { layer.replaceChildren(); if (scene) { layout(); renderWidgets(); wTimer = setInterval(renderWidgets, 1000); } }
     last = 0;
     raf = requestAnimationFrame(loop);
     ro = new ResizeObserver(() => size()); ro.observe(canvas);
@@ -566,7 +765,7 @@ const Saver = (() => {
   }
   const isMusic = (id) => { const sc = SCENES.find((x) => x.id === id); const bg = findBg(id); return !!((sc && sc.music) || (bg && bg.music)); };
   return {
-    LIST, SCENES, WIDGETS, ANIM, COLOR, ALIGN, norm, isMusic, needsAudio, start, stop, setBg, layout, syncAudio,
+    LIST, SCENES, WIDGETS, CATS, SCENE_CATS, BG_CATS, ANIM, COLOR, ALIGN, norm, isMusic, needsAudio, start, stop, setBg, layout, syncAudio,
     refresh: () => renderWidgets(),
     el: (i) => (layer ? layer.children[i] : null),
     audioLive: () => AU.live,
